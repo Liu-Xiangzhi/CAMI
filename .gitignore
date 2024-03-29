@@ -1,0 +1,5 @@
+cmake-build*/
+include/config.h
+deprecated/
+test/
+*.pdf

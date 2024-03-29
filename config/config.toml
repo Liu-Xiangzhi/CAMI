@@ -1,0 +1,32 @@
+[cami]
+disable_compiler_guarantee_check = false
+enable_auto_cache = true
+cache_path = "#/tmp/"
+enable_log_file = false
+log_file_path = "#~/.cami/log.txt"
+
+[cami.log]
+time_format = "#%Hh%Mm%Ss"
+level = "@log_level_debug"
+[cami.log.color]
+fatal = "@magenta"
+error = "@red"
+warning = "@yellow"
+info = "@green"
+verbose = "@blue"
+debug = "@cyan"
+
+[cami.object_manage]
+eden_size = "16_M"
+old_generation_size = "1_G"
+large_object_threshold = "1_M"
+promote_threshold = 8
+
+[cami.memory]
+heap.page_size = "16_K"
+heap.page_table_level = 4
+heap.allocator = "cami::am::SimpleAllocator"
+mmio.max_file = "1_K"
+
+[cami.file_system]
+root = "#~/.cami/"
