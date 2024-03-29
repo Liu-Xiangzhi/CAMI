@@ -61,3 +61,11 @@ set_target_info()
 include_directories(include)
 
 add_subdirectory(src)
+
+install(TARGETS cami
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    )
+
+install(FILES include/cami/io_def.h include/cami/std.h DESTINATION include/cami)

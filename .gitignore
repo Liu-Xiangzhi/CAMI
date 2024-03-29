@@ -3,3 +3,6 @@ include/config.h
 deprecated/
 test/
 *.pdf
+/**/__pycache__/
+/**/venv/
+/evaluation/out/

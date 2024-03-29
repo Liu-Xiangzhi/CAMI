@@ -1,0 +1,12 @@
+{
+    "tools" : {
+        "cami" : {
+            "description" : "C Abstract Machine Interpreter",
+            "commands" : [
+                "${eva_root}/bin/ccc.sh ${input}"
+            ],
+            "detect_function" : "Undefined Behavior detected"
+        }
+    },
+    "filter": []
+}
