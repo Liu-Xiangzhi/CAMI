@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.20)
 project(cami
     LANGUAGES CXX
     DESCRIPTION "C Abstract Machine Interpreter")
@@ -19,8 +19,8 @@ endfunction()
 function(open_leak_sanitizer)
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU" OR
         "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=leak")
-        set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=leak")
+        set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=leak" PARENT_SCOPE)
+        set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=leak" PARENT_SCOPE)
     else ()
         message(WARNING "leak sanitizer is not enabled")
     endif ()
@@ -36,6 +36,8 @@ function(set_target_info)
         add_compile_definitions(CAMI_TARGET_INFO_BIG_ENDIAN)
     elseif ("${CMAKE_CXX_BYTE_ORDER}" STREQUAL "LITTLE_ENDIAN")
         add_compile_definitions(CAMI_TARGET_INFO_LITTLE_ENDIAN)
+    else ()
+        message(FATAL_ERROR "unsupported byte order: ${CMAKE_CXX_BYTE_ORDER}")
     endif ()
     # set os info
     if (UNIX)

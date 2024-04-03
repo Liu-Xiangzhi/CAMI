@@ -24,6 +24,7 @@
 
 using namespace cami;
 using namespace tr;
+using RelocateEntry = UnlinkedMBC::RelocateEntry;
 
 void Assembler::parseTypes()
 {
@@ -53,17 +54,20 @@ void Assembler::parseTypes()
     }
 }
 
-void Assembler::parseCodeCommon(MBC::Code& code)
+std::pair<std::vector<uint8_t>, std::vector<RelocateEntry>> Assembler::parseCode()
 {
     std::map<std::string, uint64_t> labels;
-    std::vector<uint8_t> code_bin;
-    std::vector<std::pair<uint64_t, std::string>> relocate;
+    std::vector<uint8_t> code;
+    std::vector<RelocateEntry> relocate;
     // relocate_instr_offset, symbol_name, symbol_offset in file
     std::vector<std::tuple<uint64_t, std::string, uint64_t>> relocate_label;
     while (true) {
         auto token = this->nextToken();
         if (token->type == Token::Type::section_name || token->type == Token::Type::end) {
             this->putBack(std::move(token));
+            break;
+        }
+        if (token->type == Token::Type::dot) {
             break;
         }
         if (token->type != Token::Type::unquote_string) {
@@ -74,7 +78,7 @@ void Assembler::parseCodeCommon(MBC::Code& code)
         if (next_token->type == Token::Type::colon) {
             auto [itr, inserted] = labels.emplace(
                     std::piecewise_construct, std::forward_as_tuple(std::move(down_cast<StringToken&>(token).value)),
-                    std::forward_as_tuple(code_bin.size()));
+                    std::forward_as_tuple(code.size()));
             if (!inserted) {
                 this->diagnostic(token->begin, lib::format("duplicated flag: '${}'", itr->first));
             }
@@ -82,7 +86,7 @@ void Assembler::parseCodeCommon(MBC::Code& code)
         }
         this->putBack(std::move(next_token));
         this->putBack(std::move(token));
-        this->parseInstr(code_bin, relocate, relocate_label);
+        this->parseInstr(code, relocate, relocate_label);
     }
     // relocate label
     for (const auto& item: relocate_label) {
@@ -95,13 +99,10 @@ void Assembler::parseCodeCommon(MBC::Code& code)
         auto source_offset = relocate_instr_offset + 4;
         auto target_offset = itr->second;
         auto jmp_offset = target_offset - source_offset;
-        auto relocate_point = code_bin.data() + relocate_instr_offset + 1;
-        relocate_point[0] = static_cast<uint8_t>(jmp_offset);
-        relocate_point[1] = static_cast<uint8_t>(jmp_offset >> 8);
-        relocate_point[2] = static_cast<uint8_t>(jmp_offset >> 16);
+        auto relocate_point = code.data() + relocate_instr_offset + 1;
+        lib::write<3>(relocate_point, jmp_offset);
     }
-    code.bin.assign(lib::Array<uint8_t>::fromVector(code_bin));
-    code.relocate.assign(lib::Array<std::pair<uint64_t, std::string>>::fromVector(std::move(relocate)));
+    return {std::move(code), std::move(relocate)};
 }
 
 void Assembler::parseTypeDefine(bool is_struct, std::string struct_or_union_name)
@@ -141,7 +142,7 @@ void Assembler::parseTypeDefine(bool is_struct, std::string struct_or_union_name
 }
 
 void Assembler::parseInstr(std::vector<uint8_t>& code_bin,
-                           std::vector<std::pair<uint64_t, std::string>>& relocate,
+                           std::vector<UnlinkedMBC::RelocateEntry>& relocate,
                            std::vector<std::tuple<uint64_t, std::string, uint64_t>>& relocate_label)
 {
     using am::Opcode;
@@ -216,18 +217,14 @@ void Assembler::parseInstr(std::vector<uint8_t>& code_bin,
         token = this->nextToken();
         if (token->type == Token::Type::integer) {
             auto id = InstrInfo::IdentifierId::fromAutomaticObject(down_cast<IntegerToken&>(token).value);
-            auto ptr = &code_bin.back() - 2;
-            ptr[0] = static_cast<uint8_t>(id);
-            ptr[1] = static_cast<uint8_t>(id >> 8);
-            ptr[2] = static_cast<uint8_t>(id >> 16);
+            lib::write<3>(&code_bin.back() - 2, id);
             return;
         }
         if ((token)->type != Token::Type::unquote_string) {
             this->diagnostic(token->begin, "expect unquoted string or integer");
             return;
         }
-        relocate.emplace_back(std::piecewise_construct, std::forward_as_tuple(code_bin.size() - 4),
-                              std::forward_as_tuple(std::move(down_cast<StringToken&>(token).value)));
+        relocate.emplace_back(code_bin.size() - 4, std::move(down_cast<StringToken&>(token).value));
     } else if (instr == "new" || instr == "cast") {
         if (auto type = this->parseTypeSpecifier(); type) {
             this->parsed_types.insert(*type);
@@ -252,10 +249,7 @@ void Assembler::parseInstr(std::vector<uint8_t>& code_bin,
             return;
         }
         auto val = down_cast<IntegerToken&>(token).value;
-        auto ptr = &code_bin.back() - 2;
-        ptr[0] = static_cast<uint8_t>(val);
-        ptr[1] = static_cast<uint8_t>(val >> 8);
-        ptr[2] = static_cast<uint8_t>(val >> 16);
+        lib::write<3>(&code_bin.back() - 2, val);
     }
 }
 
@@ -298,7 +292,7 @@ lib::Optional<const ts::Type*> Assembler::do_parseTypeSpecifier() // NOLINT
             derived_type = this->parseTypeFunction({type});
             break;
         case Token::Type::unquote_string: {
-            auto [parsed_type, terminate] = this->parseTypeBasicOrQualifier(type, std::move(token));
+            auto [parsed_type, terminate] = this->parseTypeBaseOrQualify(type, std::move(token));
             derived_type = parsed_type;
             if (terminate) {
                 return type;
@@ -389,8 +383,7 @@ lib::Optional<const ts::Type*> Assembler::parseTypeFunction(const std::vector<co
     return &type_manager.getFunction(**ret_type, lib::Array<const Type*>::fromVector(params));
 }
 
-std::pair<lib::Optional<const ts::Type*>, bool> Assembler::parseTypeBasicOrQualifier(
-        const ts::Type* base_type, std::unique_ptr<Token> token)
+std::pair<lib::Optional<const ts::Type*>, bool> Assembler::parseTypeBaseOrQualify(const ts::Type* base_type, std::unique_ptr<Token> token)
 {
     using namespace ts;
     static const std::map<std::string_view, Kind> basics{

@@ -24,10 +24,10 @@ using namespace tr;
 using am::spd::StaticObjectDescription;
 using std::operator ""sv;
 
-std::unique_ptr<MBC> Assembler::assemble(std::string_view tbc, std::string_view name)
+std::unique_ptr<UnlinkedMBC> Assembler::assemble(std::string_view tbc, std::string_view name)
 {
     this->reset(tbc, name);
-    auto result = std::make_unique<MBC>();
+    auto result = std::make_unique<UnlinkedMBC>();
     this->mbc = result.get();
     for (auto token = this->nextToken(); token->type != Token::Type::end; token = this->nextToken()) {
         this->putBack(std::move(token));
@@ -36,30 +36,19 @@ std::unique_ptr<MBC> Assembler::assemble(std::string_view tbc, std::string_view 
     if (this->has_error || this->lexer.hasError()) {
         throw AssemblyException{};
     }
-    this->mbc->types.assign(lib::Array<const ts::Type*>::fromSet(this->parsed_types));
-    this->mbc->constants.assign(lib::Array<std::pair<const ts::Type*, uint64_t>>::fromSet(this->parsed_constants));
+    this->mbc->types.insert(this->mbc->types.end(), this->parsed_types.begin(), this->parsed_types.end());
+    this->mbc->constants.insert(this->mbc->constants.end(), this->parsed_constants.begin(), this->parsed_constants.end());
     return result;
 }
 
 void Assembler::parseSection()
 {
     static const std::map<std::string_view, void (Assembler::*)()> mapper{
-            {".attribute"sv,              &Assembler::parseAttribute},
-            {".comment"sv,                &Assembler::parseComment},
-            {".types"sv,                  &Assembler::parseTypes},
-            {".code"sv,                   &Assembler::parseCode},
-            {".code.init"sv,              &Assembler::parseInitCode},
-            {".code.thread_local_init"sv, &Assembler::parseThreadLocalInitCode},
-            {".object"sv,                 &Assembler::parseObjects},
-            {".object.bss"sv,             &Assembler::parseBSSObjects},
-            {".object.string_literal"sv,  &Assembler::parseStringLiteralObjects},
-            {".object.thread_local"sv,    &Assembler::parseThreadLocalObjects},
-            {".function"sv,               &Assembler::parseFunctions},
-            {".bss"sv,                    &Assembler::parseBSS},
-            {".data"sv,                   &Assembler::parseData},
-            {".data.string_literal"sv,    &Assembler::parseStringLiteralData},
-            {".data.thread_local"sv,      &Assembler::parseThreadLocalData},
-            {".stack_init"sv,             &Assembler::parseStackInitData},
+            {".attribute"sv, &Assembler::parseAttribute},
+            {".comment"sv,   &Assembler::parseComment},
+            {".types"sv,     &Assembler::parseTypes},
+            {".object"sv,    &Assembler::parseObjects},
+            {".function"sv,  &Assembler::parseFunctions},
     };
     auto token = this->nextToken();
     if (token->type != Token::Type::section_name) {

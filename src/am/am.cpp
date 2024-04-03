@@ -22,6 +22,7 @@
 #include <numeric>
 #include <foundation/type/helper.h>
 #include <foundation/logger.h>
+#include <lib/utils.h>
 
 using namespace cami;
 using am::AbstractMachine;
@@ -158,25 +159,64 @@ void AbstractMachine::execute()
     }
 }
 
-Global AbstractMachine::initStaticInfo(InitializeDescription& desc)
+Global AbstractMachine::initStaticInfo(tr::LinkedMBC& bytecode)
 {
-    if (desc.functions.length() > UINT32_MAX) {
-        throw AMInitialFailedException{"Too many functions"};
-    }
-    lib::Array<Object*> static_objects(desc.static_objects.length());
+    lib::Array<Object*> static_objects(bytecode.static_objects.length());
     for (size_t i = 0; i < static_objects.length(); ++i) {
-        auto& sod = desc.static_objects[i];
+        auto& sod = bytecode.static_objects[i];
         static_objects[i] = this->object_manager.newPermanent(std::move(sod.name), *sod.type, sod.address);
     }
-    return Global{std::move(static_objects), std::move(desc.constants), std::move(desc.types),
-                  std::move(desc.functions), std::move(desc.stack_init_data)};
+    return Global{std::move(static_objects), std::move(bytecode.constants), std::move(bytecode.types),
+                  std::move(bytecode.functions)};
 }
 
-uint64_t am::AbstractMachine::countPermanentObject(InitializeDescription& desc)
+uint64_t AbstractMachine::countPermanentObject(tr::LinkedMBC& bytecode)
 {
     return VirtualMemory::MMIO_OBJECT_NUM + std::accumulate(
-            desc.static_objects.begin(), desc.static_objects.end(), 0,
+            bytecode.static_objects.begin(), bytecode.static_objects.end(), 0,
             [](uint64_t val, const StaticObjectDescription& obj) {
                 return val + ts::countCorrespondingObjectFamily(*obj.type);
             });
+}
+
+tr::LinkedMBC& AbstractMachine::preprocessBytecode(tr::LinkedMBC& bytecode)
+{
+    AbstractMachine::checkMetadataCnt(bytecode);
+    lib::Array<uint8_t> data(bytecode.data.length() + bytecode.bss_size);
+    std::memcpy(data.data(), bytecode.data.data(), bytecode.data.length());
+    std::memset(data.data() + bytecode.data.length(), 0, bytecode.bss_size);
+    std::map<std::string_view, uint64_t> address_map;
+    bytecode.data.assign(std::move(data));
+    for (auto& item: bytecode.static_objects) {
+        item.address += layout::DATA_BASE;
+        address_map.emplace(item.name, item.address);
+    }
+    for (auto& item: bytecode.functions) {
+        item.address += layout::CODE_BASE;
+        address_map.emplace(item.name, item.address);
+    }
+    for (const auto& [offset, symbol]: bytecode.data_relocate) {
+        auto itr = address_map.find(symbol);
+        if (itr == address_map.end()) {
+            throw AMInitialFailedException{std::string{"cannot find symbol: "}.append(symbol)};
+        }
+        lib::write<8>(&bytecode.data[offset], lib::readU<8>(&bytecode.data[offset]) + itr->second);
+    }
+    return bytecode;
+}
+
+void AbstractMachine::checkMetadataCnt(tr::LinkedMBC& bytecode)
+{
+    if (bytecode.types.length() > InstrInfo::ID_MAX) {
+        throw AMInitialFailedException{"Too many types"};
+    }
+    if (bytecode.constants.length() > InstrInfo::ID_MAX) {
+        throw AMInitialFailedException{"Too many constants"};
+    }
+    if (bytecode.functions.length() > InstrInfo::FUNCTION_ID_MAX) {
+        throw AMInitialFailedException{"Too many functions"};
+    }
+    if (bytecode.static_objects.length() > InstrInfo::STATIC_OBJECT_ID_MAX) {
+        throw AMInitialFailedException{"Too many static_objects"};
+    }
 }

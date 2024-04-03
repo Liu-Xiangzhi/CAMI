@@ -18,278 +18,106 @@
 #include <exception.h>
 #include <lib/utils.h>
 #include <lib/assert.h>
+#include <lib/slice.h>
 #include <foundation/type/mm.h>
-#include <am/vmm.h>
 #include <am/fetch_decode.h>
+#include <am/spd.h>
 #include <set>
 #include <map>
 #include <cstring>
-#include <functional>
-
-#define FIELD_GETTER(field) [](const MBC* mbc) -> auto& { return mbc->field; } // NOLINT
-// create a new traverser based on old traverser `traverser`,
-//  the field_getter of new one is 'piped' after the old one
-//  i.e. field_getter of old one is `mbc.xxx`, while the new one is `mbc.xxx.yyy`
-#define PIPE_FIELD_GETTER(traverser, field) {traverser.mbcs, traverser.mbcs_len, [&](const MBC* mbc) -> auto& { return traverser.field_getter(mbc).field; }} // NOLINT
 
 using namespace cami;
 using namespace tr;
-using Data = MBC::Data;
-using BSS = MBC::BSS;
-using Code = MBC::Code;
 using am::spd::StaticObjectDescription;
 using am::spd::Function;
 using am::InstrInfo;
 
-using u64_array_ref_t = const lib::Array<uint64_t>&;
-using relo_entry_t = std::pair<uint64_t, std::string>;
-
 namespace {
-
-template<typename T_elem, typename T_filed_getter, typename T_set_elem = T_elem>
-lib::Array<T_elem> uniquelyMerge(const lib::Array<const MBC*>& mbcs, const T_filed_getter& filed_getter)
+enum class UnlinkedMBCField
 {
-    std::set<T_set_elem> set{};
-    for (const MBC* item: mbcs) {
-        for (const auto& i: filed_getter(item)) {
-            set.insert(i);
+    type, constant, dynamic_link
+};
+template<UnlinkedMBCField field>
+struct FieldGetter;
+
+template<>
+struct FieldGetter<UnlinkedMBCField::type>
+{
+    using type = const ts::Type*;
+
+    static std::vector<type>& get(UnlinkedMBC& unlinked_mbc)
+    {
+        return unlinked_mbc.types;
+    }
+};
+
+template<>
+struct FieldGetter<UnlinkedMBCField::constant>
+{
+    using type = std::pair<const ts::Type*, uint64_t>;
+
+    static std::vector<type>& get(UnlinkedMBC& unlinked_mbc)
+    {
+        return unlinked_mbc.constants;
+    }
+};
+
+template<>
+struct FieldGetter<UnlinkedMBCField::dynamic_link>
+{
+    using type = std::string;
+
+    static std::vector<type>& get(UnlinkedMBC& unlinked_mbc)
+    {
+        return unlinked_mbc.attribute.dynamic_links;
+    }
+};
+
+template<UnlinkedMBCField filed>
+std::vector<typename FieldGetter<filed>::type> uniquelyMerge(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
+{
+    std::set<typename FieldGetter<filed>::type> set{};
+    for (auto& item: mbcs) {
+        for (auto& i: FieldGetter<filed>::get(*item)) {
+            set.emplace(std::move(i));
         }
     }
-    lib::Array<T_elem> result(set.size());
-    uint64_t cnt = 0;
-    for (const auto& item: set) {
-        result[cnt++] = item;
-    }
-    return result;
+    return {std::make_move_iterator(set.begin()), std::make_move_iterator(set.end())};
 }
 
-lib::Array<const ts::Type*> mergeTypes(const lib::Array<const MBC*>& mbcs)
+std::vector<const ts::Type*> mergeTypes(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
 {
-    constexpr auto field_getter = [](const MBC* mbc) -> auto& { return mbc->types; };
-    return uniquelyMerge<const ts::Type*>(mbcs, field_getter);
+    return uniquelyMerge<UnlinkedMBCField::type>(mbcs);
 }
 
-lib::Array<std::pair<const ts::Type*, uint64_t>> mergeConstants(const lib::Array<const MBC*>& mbcs)
+std::vector<std::pair<const ts::Type*, uint64_t>> mergeConstants(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
 {
-    constexpr auto field_getter = [](const MBC* mbc) -> auto& { return mbc->constants; };
-    return uniquelyMerge<std::pair<const ts::Type*, uint64_t>>(mbcs, field_getter);
+    return uniquelyMerge<UnlinkedMBCField::constant>(mbcs);
 }
 
-lib::Array<std::string> mergeStaticLinks(const lib::Array<const MBC*>& mbcs)
+std::vector<std::string> mergeStaticLinks(lib::Slice<std::unique_ptr<UnlinkedMBC>>& mbcs)
 {
-    std::set<std::string_view> files{};
-    for (const MBC* mbc: mbcs) {
-        for (const auto& item: mbc->attribute.static_links) {
-            files.insert(item);
+    std::set<std::string> files{};
+    for (auto& mbc: mbcs) {
+        for (auto& item: mbc->attribute.static_links) {
+            files.emplace(std::move(item));
         }
     }
-    for (const MBC* mbc: mbcs) {
+    for (const auto& mbc: mbcs) {
         files.erase(mbc->source_name);
     }
-    lib::Array<std::string> result(files.size());
-    uint64_t cnt = 0;
-    for (std::string_view item: files) {
-        result.init(cnt++, item);
-    }
-    return result;
+    return {std::make_move_iterator(files.begin()), std::make_move_iterator(files.end())};
 }
 
-lib::Array<std::string> mergeDynamicLinks(const lib::Array<const MBC*>& mbcs)
+std::vector<std::string> mergeDynamicLinks(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
 {
-    constexpr auto field_getter = [](const MBC* mbc) -> auto& { return mbc->attribute.dynamic_links; };
-    return uniquelyMerge<std::string, decltype(field_getter), std::string_view>(mbcs, field_getter);
+    return uniquelyMerge<UnlinkedMBCField::dynamic_link>(mbcs);
 }
 
-template<typename T>
-void correctAddress(u64_array_ref_t bin_offs, u64_array_ref_t metadata_cnt, lib::Array<T>& entities)
-{
-    uint64_t cur = 0;
-    for (size_t i = 0; i < metadata_cnt.length(); ++i) {
-        for (int j = 0; j < metadata_cnt[i]; ++j) {
-            entities[cur++].address += bin_offs[i];
-        }
-    }
-}
-
-void correctDebugInfo(am::spd::SourceCodeLocator& func_locator, uint64_t offset)
-{
-    for (auto& item: func_locator.data) {
-        item.addr += offset;
-    }
-}
-
-void correctDebugInfo(u64_array_ref_t code_offs, u64_array_ref_t func_cnt, lib::Array<Function>& functions)
-{
-    uint64_t cur = 0;
-    for (size_t i = 0; i < func_cnt.length(); ++i) {
-        for (int j = 0; j < func_cnt[i]; ++j) {
-            correctDebugInfo(functions[cur++].func_locator, code_offs[i]);
-        }
-    }
-}
-
-void correctInitOffset(u64_array_ref_t init_data_offs, u64_array_ref_t func_cnt, lib::Array<Function>& functions)
-{
-    uint64_t cur = 0;
-    for (size_t i = 0; i < func_cnt.length(); ++i) {
-        for (int j = 0; j < func_cnt[i]; ++j) {
-            for (auto& block: functions[cur].blocks) {
-                for (auto& obj: block.obj_desc) {
-                    if (obj.init_offset) {
-                        *obj.init_offset += init_data_offs[i];
-                    }
-                }
-            }
-            cur++;
-        }
-    }
-}
-
-constexpr auto correctObject = correctAddress<StaticObjectDescription>;
-
-void correctFunctions(u64_array_ref_t code_offs, u64_array_ref_t init_data_offs, u64_array_ref_t func_cnt,
-                      lib::Array<Function>& functions)
-{
-    correctAddress(code_offs, func_cnt, functions);
-    correctDebugInfo(code_offs, func_cnt, functions);
-    correctInitOffset(init_data_offs, func_cnt, functions);
-}
-
-void correctRelocate(u64_array_ref_t code_offs, u64_array_ref_t relo_cnt, lib::Array<relo_entry_t>& relocates)
-{
-    uint64_t cur = 0;
-    for (size_t i = 0; i < relo_cnt.length(); ++i) {
-        for (int j = 0; j < relo_cnt[i]; ++j) {
-            relocates[cur++].first += code_offs[i];
-        }
-    }
-}
-
-template<typename T>
-auto mergeEntity(uint64_t entity_cnt, const Traverser<const lib::Array<T>>& traverser)
-{
-    lib::Array<T> entities(entity_cnt);
-    uint64_t cur = 0;
-    for (const auto& src_entities: traverser) {
-        for (const auto& item: src_entities) {
-            entities.init(cur++, item);
-        }
-    }
-    return entities;
-}
-
-constexpr auto mergeObject = mergeEntity<StaticObjectDescription>;
-constexpr auto mergeFunction = mergeEntity<Function>;
-
-lib::Array<uint8_t> mergeDataBin(uint64_t bin_len, const Traverser<const Data>& traverser, u64_array_ref_t data_offs)
-{
-    lib::Array<uint8_t> bin(bin_len);
-    uint64_t i = 0;
-    uint64_t cur;
-    for (const auto& src_data: traverser) {
-        cur = data_offs[i];
-        std::memcpy(bin.data() + cur, src_data.bin.data(), src_data.bin.length());
-        cur += src_data.bin.length();
-        std::memset(bin.data() + cur, 0, data_offs[i + 1] - cur);
-        i++;
-    }
-    return bin;
-}
-
-lib::Array<uint8_t> mergeCodeBin(uint64_t code_len, const Traverser<const Code>& traverser)
-{
-    lib::Array<uint8_t> code(code_len);
-    uint64_t cur = 0;
-    for (const auto& src_data: traverser) {
-        std::memcpy(code.data() + cur, src_data.bin.data(), src_data.bin.length());
-        cur += src_data.bin.length();
-    }
-    return code;
-}
-
-auto mergeRelocate(uint64_t relocate_cnt, const Traverser<const lib::Array<relo_entry_t>>& traverser)
-{
-    lib::Array<relo_entry_t> relocate(relocate_cnt);
-    uint64_t cur = 0;
-    for (const auto& src_relocate: traverser) {
-        for (const auto& item: src_relocate) {
-            relocate.init(cur++, item);
-        }
-    }
-    return relocate;
-}
-
-DataMergeResult mergeData(const Traverser<const Data>& traverser)
-{
-    lib::Array<uint64_t> data_offsets(traverser.mbcs_len + 1);
-    lib::Array<uint64_t> object_cnt(traverser.mbcs_len);
-    uint64_t total_len = 0;
-    uint64_t align = 0;
-    uint64_t total_object_cnt = 0;
-    uint64_t i = 0;
-    for (const auto& src_data: traverser) {
-        data_offsets[i] = lib::roundUp(total_len, src_data.align);
-        object_cnt[i] = src_data.objects.length();
-        total_len = data_offsets[i] + src_data.bin.length();
-        align = std::max(align, src_data.align);
-        total_object_cnt += src_data.objects.length();
-        i++;
-    }
-    data_offsets[traverser.mbcs_len] = total_len;
-    auto data_bin = mergeDataBin(total_len, traverser, data_offsets);
-    auto objects = mergeObject(total_object_cnt, PIPE_FIELD_GETTER(traverser, objects));
-    return {{align, std::move(data_bin), std::move(objects)}, std::move(data_offsets), std::move(object_cnt)};
-}
-
-BssMergeResult mergeBss(const Traverser<const BSS>& traverser)
-{
-    lib::Array<uint64_t> bss_offsets(traverser.mbcs_len);
-    lib::Array<uint64_t> object_cnt(traverser.mbcs_len);
-    uint64_t total_len = 0;
-    uint64_t align = 0;
-    uint64_t total_object_cnt = 0;
-    uint64_t i = 0;
-    for (const auto& src_bss: traverser) {
-        bss_offsets[i] = lib::roundUp(total_len, src_bss.align);
-        object_cnt[i] = src_bss.objects.length();
-        total_len = bss_offsets[i] + src_bss.len;
-        align = std::max(align, src_bss.align);
-        total_object_cnt += src_bss.objects.length();
-        i++;
-    }
-    auto objects = mergeObject(total_object_cnt, PIPE_FIELD_GETTER(traverser, objects));
-    return {{align, total_len, std::move(objects)}, std::move(bss_offsets), std::move(object_cnt)};
-}
-
-CodeMergeResult mergeCode(const Traverser<const Code>& traverser)
-{
-    lib::Array<uint64_t> code_offsets(traverser.mbcs_len);
-    lib::Array<uint64_t> function_cnt(traverser.mbcs_len);
-    lib::Array<uint64_t> relocate_cnt(traverser.mbcs_len);
-    uint64_t total_len = 0;
-    uint64_t total_function_cnt = 0;
-    uint64_t total_relocate_cnt = 0;
-    uint64_t i = 0;
-    for (const auto& src_code: traverser) {
-        code_offsets[i] = total_len;
-        function_cnt[i] = src_code.functions.length();
-        relocate_cnt[i] = src_code.relocate.length();
-        total_len += src_code.bin.length();
-        total_function_cnt += src_code.functions.length();
-        total_relocate_cnt += src_code.relocate.length();
-        i++;
-    }
-    auto code_bin = mergeCodeBin(total_len, traverser);
-    auto functions = mergeFunction(total_function_cnt, PIPE_FIELD_GETTER(traverser, functions));
-    auto relocates = mergeRelocate(total_relocate_cnt, PIPE_FIELD_GETTER(traverser, relocate));
-    return {{std::move(code_bin), std::move(functions), std::move(relocates)},
-            std::move(code_offsets), std::move(function_cnt), std::move(relocate_cnt)};
-}
-
-MBC::Attribute linkAttribute(const lib::Array<const MBC*>& mbcs, MBC::Type link_type)
+MBC::Attribute linkAttribute(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs, MBC::Type link_type)
 {
     std::string module_or_entry_name;
-    for (const MBC* mbc: mbcs) {
+    for (const auto& mbc: mbcs) {
         if (!mbc->attribute.module_or_entry_name.empty()) {
             if (!module_or_entry_name.empty() && mbc->attribute.module_or_entry_name != module_or_entry_name) {
                 throw ConflictModuleOrEntryException{};
@@ -310,263 +138,242 @@ MBC::Attribute linkAttribute(const lib::Array<const MBC*>& mbcs, MBC::Type link_
     };
 }
 
-BSS linkBss(const Traverser<const BSS>& traverser)
+struct ObjectLayout
 {
-    auto bss_result = mergeBss(traverser);
-    correctObject(bss_result.bin_offsets, bss_result.object_cnt, bss_result.bss.objects);
-    return std::move(bss_result.bss);
-}
+//  string_literal_begin == 0
+    uint64_t data_begin;
+    uint64_t bss_begin;
+    uint64_t thread_local_begin;
 
-Data linkData(const Traverser<const Data>& traverser)
-{
-    auto data_result = mergeData(traverser);
-    correctObject(data_result.bin_offsets, data_result.object_cnt, data_result.data.objects);
-    return std::move(data_result.data);
-}
+    [[nodiscard]] uint64_t staticObjectCnt() const noexcept
+    {
+        return this->thread_local_begin;
+    }
+};
 
-Code linkCode(const Traverser<const Code>& traverser, const DataMergeResult& stack_init_result)
+auto mergeObjects(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
+-> std::pair<std::vector<std::unique_ptr<UnlinkedMBC::StaticObject>>, std::map<std::string, std::string>>
 {
-    auto code_result = mergeCode(traverser);
-    if (code_result.function_cnt.length() > 0) {
-        correctFunctions(code_result.bin_offs, stack_init_result.bin_offsets, code_result.function_cnt,
-                         code_result.code.functions);
-    }
-    correctRelocate(code_result.bin_offs, code_result.relocate_cnt, code_result.code.relocate);
-    return std::move(code_result.code);
-}
-
-std::map<std::string, uint64_t> makeRelocateMapper(const lib::Array<const ts::Type*>& types,
-                                                   const lib::Array<std::pair<const ts::Type*, uint64_t>>& constants,
-                                                   const Code& code, const BSS& bss, const Data& data,
-                                                   const Data& string_literal, const Data& thread_local_)
-{
-    std::map<std::string, uint64_t> result;
-    for (size_t i = 0; i < types.length(); ++i) {
-        result.emplace(lib::format("#${}", *types[i]), i);
-    }
-    for (size_t i = 0; i < constants.length(); ++i) {
-        result.emplace(lib::format("<${}; ${}>", *constants[i].first, constants[i].second), i);
-    }
-    for (size_t i = 0; i < code.functions.length(); ++i) {
-        if (!result.emplace(code.functions[i].name, InstrInfo::IdentifierId::fromFunctionIndex(i)).second) {
-            throw DuplicatedSymbolException{code.functions[i].name};
+    std::map<std::string, std::string> string_literal_name_map;
+    std::map<std::string_view, std::string> string_literal_value_to_name;
+    std::vector<std::unique_ptr<UnlinkedMBC::StaticObject>> objects;
+    for (auto& item: mbcs) {
+        for (auto& obj: item->objects) {
+            if (obj->segment == UnlinkedMBC::StaticObject::string_literal) {
+                std::string_view sv{reinterpret_cast<const char*>(obj->value.data()), obj->value.size()};
+                if (auto itr = string_literal_value_to_name.find(sv);itr != string_literal_value_to_name.end()) {
+                    string_literal_name_map.emplace(obj->name, itr->second);
+                    continue;
+                } else {
+                    string_literal_value_to_name.emplace(sv, obj->name);
+                }
+            }
+            objects.push_back(std::move(obj));
         }
     }
-    uint64_t obj_cnt = 0;
-    for (const auto& item: data.objects) {
-        if (!result.emplace(item.name, InstrInfo::IdentifierId::fromStaticObject(obj_cnt++)).second) {
-            throw DuplicatedSymbolException{item.name};
+    return {std::move(objects), std::move(string_literal_name_map)};
+}
+
+std::vector<std::unique_ptr<UnlinkedMBC::Function>> mergeFunctions(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs)
+{
+    std::vector<std::unique_ptr<UnlinkedMBC::Function>> functions;
+    for (auto& item: mbcs) {
+        for (auto& func: item->functions) {
+            functions.push_back(std::move(func));
         }
     }
-    for (const auto& item: bss.objects) {
-        if (!result.emplace(item.name, InstrInfo::IdentifierId::fromStaticObject(obj_cnt++)).second) {
-            throw DuplicatedSymbolException{item.name};
+    return std::move(functions);
+}
+
+void relocateStringLiteralReference(const std::map<std::string, std::string>& string_literal_name_map,
+                                    std::vector<std::unique_ptr<UnlinkedMBC::StaticObject>>& objects,
+                                    std::vector<std::unique_ptr<UnlinkedMBC::Function>>& functions)
+{
+    for (auto& item: functions) {
+        for (auto& relo: item->relocate) {
+            if (auto itr = string_literal_name_map.find(relo.symbol); itr != string_literal_name_map.end()) {
+                relo.symbol = itr->second;
+            }
         }
     }
-    for (const auto& item: string_literal.objects) {
-        if (!result.emplace(item.name, InstrInfo::IdentifierId::fromStaticObject(obj_cnt++)).second) {
-            throw DuplicatedSymbolException{item.name};
+    for (auto& item: objects) {
+        if (auto itr = string_literal_name_map.find(item->relocate_symbol); itr != string_literal_name_map.end()) {
+            item->relocate_symbol = itr->second;
         }
     }
-    for (const auto& item: thread_local_.objects) {
-        if (!result.emplace(item.name, InstrInfo::IdentifierId::fromStaticObject(obj_cnt++)).second) {
-            throw DuplicatedSymbolException{item.name};
-        }
-    }
-    return result;
 }
 
-void do_relocate(Code& code, const std::map<std::string, uint64_t>& relocate_mapper)
+std::unique_ptr<UnlinkedMBC> makeUnlinkedMBC(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs, const LinkOption& option)
 {
-    for (const auto& [offset, symbol]: code.relocate) {
-        auto itr = relocate_mapper.find(symbol);
-        if (itr == relocate_mapper.end()) {
-            throw CannotFoundSymbolException{symbol};
-        }
-        auto id = itr->second;
-        code.bin[offset + 1] = static_cast<uint8_t>(id);
-        code.bin[offset + 2] = static_cast<uint8_t>(id >> 8);
-        code.bin[offset + 3] = static_cast<uint8_t>(id >> 16);
-    }
-    code.relocate.clear();
+    auto attribute = linkAttribute(mbcs, option.type);
+    ASSERT(option.type == MBC::Type::object_file || attribute.static_links.empty(), "missing static link files");
+    auto [objects, string_literal_name_map] = mergeObjects(mbcs);
+    auto functions = mergeFunctions(mbcs);
+    relocateStringLiteralReference(string_literal_name_map, objects, functions);
+    return std::make_unique<UnlinkedMBC>("", std::move(attribute), "linked by CAMI Linker",
+                                         std::move(objects), std::move(functions), mergeTypes(mbcs),
+                                         mergeConstants(mbcs));
 }
 
-void relocate(const lib::Array<const ts::Type*>& types,
-              const lib::Array<std::pair<const ts::Type*, uint64_t>>& constants,
-              Code& code, Code& init_code, Code& thread_local_init_code,
-              const BSS& bss, const Data& data, const Data& string_literal, const Data& thread_local_)
+void insertBootFunction(UnlinkedMBC& unlinked_mbc)
 {
-    auto relocate_mapper = makeRelocateMapper(types, constants, code, bss, data, string_literal, thread_local_);
-    do_relocate(code, relocate_mapper);
-    do_relocate(init_code, relocate_mapper);
-    do_relocate(thread_local_init_code, relocate_mapper);
-}
-
-void mergeInitCode(Code& code, Code& init_code, Code& thread_local_init_code)
-{
-    lib::Array<uint8_t> bin(code.bin.length() + init_code.bin.length() + thread_local_init_code.bin.length() + 2);
-    std::memcpy(bin.data(), code.bin.data(), code.bin.length());
-    std::memcpy(bin.data() + code.bin.length(), init_code.bin.data(), init_code.bin.length());
-    bin[code.bin.length() + init_code.bin.length()] = static_cast<uint8_t>(am::Opcode::ret);
-    std::memcpy(bin.data() + code.bin.length() + init_code.bin.length() + 1, thread_local_init_code.bin.data(),
-                thread_local_init_code.bin.length());
-    bin[code.bin.length() + init_code.bin.length() + 1 + thread_local_init_code.bin.length()]
-            = static_cast<uint8_t>(am::Opcode::ret);
-    code.bin.assign(std::move(bin));
-    // generate function
-    lib::Array<Function> functions(code.functions.length() + 2);
-    uint64_t i = 0;
-    for (auto& item: code.functions) {
-        functions.init(i++, std::move(item));
-    }
-    uint64_t address = functions[i - 1].address + functions[i - 1].code_size;
-    auto& void_ = ts::type_manager.getBasicType(ts::Kind::void_);
-    auto& void_f_void = ts::type_manager.getFunction(void_, {});
-    new(&functions[i]) Function{"__init__", void_f_void, address, "<no file>", 0, init_code.bin.length() + 1,
-                                0, {{}}, {}, {}};
-    address += init_code.bin.length() + 1;
-    new(&functions[i + 1]) Function{"__init_thread_local__", void_f_void, address, "<no file>", 0,
-                                    thread_local_init_code.bin.length() + 1, 0, {{}}, {}, {}};
-    code.functions.assign(std::move(functions));
-    init_code.clear();
-    thread_local_init_code.clear();
-}
-
-// merge object of data bss string_literal together, do correction
-void mergeBssStringLiteralObject(Data& data, BSS& bss, Data& string_literal)
-{
-    lib::Array<StaticObjectDescription> static_objects(
-            data.objects.length() + bss.objects.length() + string_literal.objects.length());
-    uint64_t cnt = 0;
-    for (const auto& item: data.objects) {
-        static_objects.init(cnt++, item);
-    }
-    for (const auto& item: bss.objects) {
-        static_objects.init(cnt++, item);
-    }
-    for (const auto& item: string_literal.objects) {
-        static_objects.init(cnt++, item);
-    }
-    uint64_t bss_offset = lib::roundUp(data.bin.length(), bss.align);
-    uint64_t string_literal_offset = lib::roundUp(bss_offset + bss.len, string_literal.align);
-    correctObject({0, bss_offset, string_literal_offset},
-                  {data.objects.length(), bss.objects.length(), string_literal.objects.length()}, static_objects);
-    data.objects.assign(std::move(static_objects));
-    bss.objects.clear();
-    string_literal.objects.clear();
-}
-
-// merge bin of data bss string_literal together
-void makeDataMemoryLayout(Data& data, const BSS& bss, const Data& string_literal)
-{
-    uint64_t bss_offset = lib::roundUp(data.bin.length(), bss.align);
-    uint64_t string_literal_offset = lib::roundUp(bss_offset + bss.len, string_literal.align);
-    lib::Array<uint8_t> bin(string_literal_offset + string_literal.bin.length());
-    auto dest = bin.data();
-    std::memcpy(dest, data.bin.data(), data.bin.length());
-    dest += data.bin.length();
-    std::memset(dest, 0, string_literal_offset - data.bin.length());
-    dest = bin.data() + string_literal_offset;
-    std::memcpy(dest, string_literal.bin.data(), string_literal.bin.length());
-    data.bin.assign(std::move(bin));
-}
-
-void insertBootCode(Code& code, uint64_t entry_id)
-{
-    ASSERT(code.functions[code.functions.length() - 2].name == "__init__" &&
-           code.functions[code.functions.length() - 1].name == "__init_thread_local__", "assumption violation");
     using am::Opcode;
-    using am::InstrInfo;
-    constexpr uint64_t BOOT_CODE_SIZE = 40;
-    auto init_id = InstrInfo::IdentifierId::fromFunctionIndex(code.functions.length() - 2);
-    auto thread_local_init_id = InstrInfo::IdentifierId::fromFunctionIndex(code.functions.length() - 1);
-    lib::Array<uint8_t> bin(code.bin.length() + BOOT_CODE_SIZE);
-    // fe 0
-    // dsg __init__
-    // addr
-    // call 0
-    // fe 1
-    // dsg __init_thread_local__
-    // addr
-    // call 0
-    // fe 2
-    // dsg <entry>
-    // addr
-    // call 0
-    // halt
-    bin[0] = static_cast<uint8_t>(Opcode::fe);
-    bin[1] = 0;
-    bin[2] = 0;
-    bin[3] = 0;
-    bin[4] = static_cast<uint8_t>(Opcode::dsg);
-    bin[5] = static_cast<uint8_t>(init_id);
-    bin[6] = static_cast<uint8_t>(init_id >> 8);
-    bin[7] = static_cast<uint8_t>(init_id >> 16);
-    bin[8] = static_cast<uint8_t>(Opcode::addr);
-    bin[9] = static_cast<uint8_t>(Opcode::call);
-    bin[10] = 0;
-    bin[11] = 0;
-    bin[12] = 0;
-    bin[13] = static_cast<uint8_t>(Opcode::fe);
-    bin[14] = 1;
-    bin[15] = 0;
-    bin[16] = 0;
-    bin[17] = static_cast<uint8_t>(Opcode::dsg);
-    bin[18] = static_cast<uint8_t>(thread_local_init_id);
-    bin[19] = static_cast<uint8_t>(thread_local_init_id >> 8);
-    bin[20] = static_cast<uint8_t>(thread_local_init_id >> 16);
-    bin[21] = static_cast<uint8_t>(Opcode::addr);
-    bin[22] = static_cast<uint8_t>(Opcode::call);
-    bin[23] = 0;
-    bin[24] = 0;
-    bin[25] = 0;
-    bin[26] = static_cast<uint8_t>(Opcode::fe);
-    bin[27] = 2;
-    bin[28] = 0;
-    bin[29] = 0;
-    bin[30] = static_cast<uint8_t>(Opcode::dsg);
-    bin[31] = static_cast<uint8_t>(entry_id);
-    bin[32] = static_cast<uint8_t>(entry_id >> 8);
-    bin[33] = static_cast<uint8_t>(entry_id >> 16);
-    bin[34] = static_cast<uint8_t>(Opcode::addr);
-    bin[35] = static_cast<uint8_t>(Opcode::call);
-    bin[36] = 0;
-    bin[37] = 0;
-    bin[38] = 0;
-    bin[39] = static_cast<uint8_t>(Opcode::halt);
-    std::memcpy(bin.data() + BOOT_CODE_SIZE, code.bin.data(), code.bin.length());
-    code.bin.assign(std::move(bin));
-    lib::Array<Function> functions(code.functions.length() + 1);
+    auto func = std::make_unique<UnlinkedMBC::Function>();
+    func->segment = UnlinkedMBC::Function::execute;
+    func->name = "__boot__";
+    func->file_name = "<no file>";
     auto& void_ = ts::type_manager.getBasicType(ts::Kind::void_);
-    auto& void_f_void = ts::type_manager.getFunction(void_, {});
-    new(&functions.back()) Function{"__boot__", void_f_void, 0, "<no file>", 0, BOOT_CODE_SIZE,
-                                                     0, {{}}, {}, {}};
-    for (size_t i = 0; i < code.functions.length(); ++i) {
-        functions.init(i, std::move(code.functions[i]));
+    func->effective_type = &ts::type_manager.getFunction(void_, {&void_});
+    func->frame_size = 0;
+    func->max_object_num = 0;
+    func->blocks.emplace_back();
+    uint64_t init_func_cnt = 0;
+    func->code.push_back(static_cast<uint8_t>(Opcode::fe));
+    func->code.push_back(0);
+    func->code.push_back(0);
+    func->code.push_back(0);
+    for (const auto& item: unlinked_mbc.functions) {
+        if (item->segment == UnlinkedMBC::Function::init || item->segment == UnlinkedMBC::Function::thread_local_init) {
+            func->relocate.emplace_back(func->code.size(), item->name);
+            func->code.push_back(static_cast<uint8_t>(Opcode::dsg));
+            func->code.push_back(-1);
+            func->code.push_back(-1);
+            func->code.push_back(-1);
+            func->code.push_back(static_cast<uint8_t>(Opcode::addr));
+            func->code.push_back(static_cast<uint8_t>(Opcode::call));
+            func->code.push_back(init_func_cnt & 0xff);
+            func->code.push_back((init_func_cnt >> 8) & 0xff);
+            func->code.push_back((init_func_cnt >> 16) & 0xff);
+            init_func_cnt++;
+        }
     }
-    correctFunctions({BOOT_CODE_SIZE}, {0}, {code.functions.length()}, functions);
-    code.functions.assign(std::move(functions));
-}
-
-void fixAddress(Data& data, Code& code)
-{
-    correctObject({am::layout::DATA_BASE}, {data.objects.length()}, data.objects);
-    correctFunctions({am::layout::CODE_BASE}, {0}, {code.functions.length()}, code.functions);
-}
-
-std::pair<uint64_t, const Function*> findEntry(const Code& code, std::string_view entry_name)
-{
-    auto itr = std::find_if(code.functions.begin(), code.functions.end(), [&](const Function& item) {
-        return item.name == entry_name;
-    });
-    if (itr == code.functions.end()) {
-        throw CannotFoundSymbolException{entry_name};
+    func->relocate.emplace_back(func->code.size(), unlinked_mbc.attribute.module_or_entry_name);
+    func->code.push_back(static_cast<uint8_t>(Opcode::dsg));
+    func->code.push_back(-1);
+    func->code.push_back(-1);
+    func->code.push_back(-1);
+    func->code.push_back(static_cast<uint8_t>(Opcode::addr));
+    func->code.push_back(static_cast<uint8_t>(Opcode::call));
+    func->code.push_back(init_func_cnt & 0xff);
+    func->code.push_back((init_func_cnt >> 8) & 0xff);
+    func->code.push_back((init_func_cnt >> 16) & 0xff);
+    func->code.push_back(static_cast<uint8_t>(Opcode::halt));
+    UnlinkedMBC::FullExprInfo full_expr_info{
+            .trace_event_cnt = init_func_cnt + 1,
+            .sequence_after_graph = std::vector<uint8_t>(lib::roundUpDiv((init_func_cnt + 1) * (init_func_cnt + 1), 8)),
+            .source_location = std::vector<std::pair<uint64_t, uint64_t>>(init_func_cnt + 1),
+    };
+    for (size_t i = 0; i < init_func_cnt + 1; ++i) {
+        for (size_t j = 0; j < i; ++j) {
+            auto idx = i * (init_func_cnt + 1) + j;
+            full_expr_info.sequence_after_graph[idx / 8] |= 1 << (idx % 8);
+        }
     }
-    auto func = &*itr;
-    return {InstrInfo::IdentifierId::fromFunctionIndex(func - code.functions.data()), func};
+    func->full_expr_infos.push_back(std::move(full_expr_info));
+    unlinked_mbc.functions.push_back(std::move(func));
+    std::swap(unlinked_mbc.functions.back(), unlinked_mbc.functions.front());
 }
 
-lib::Array<ValueBox> makeConstants(const lib::Array<std::pair<const ts::Type*, uint64_t>>& constants)
+void arrangeFunction(std::vector<std::unique_ptr<UnlinkedMBC::Function>>& functions)
+{
+    uint64_t exec_func_cnt = 0;
+    uint64_t init_func_cnt = 0;
+    for (const auto& item: functions) {
+        if (item->segment == UnlinkedMBC::Function::execute) {
+            exec_func_cnt++;
+        } else if (item->segment == UnlinkedMBC::Function::init) {
+            init_func_cnt++;
+        }
+    }
+    uint64_t cur_exec = 0;
+    uint64_t cur_init = exec_func_cnt;
+    uint64_t cur_thread_local_init = exec_func_cnt + init_func_cnt;
+    for (auto& item: functions) {
+        if (item->segment == UnlinkedMBC::Function::execute) {
+            std::swap(item, functions[cur_exec++]);
+        } else if (item->segment == UnlinkedMBC::Function::init) {
+            std::swap(item, functions[cur_init++]);
+        } else {
+            std::swap(item, functions[cur_thread_local_init++]);
+        }
+    }
+}
+
+ObjectLayout arrangeObject(std::vector<std::unique_ptr<UnlinkedMBC::StaticObject>>& objects)
+{
+    uint64_t string_literal_cnt = 0;
+    uint64_t data_cnt = 0;
+    uint64_t bss_cnt = 0;
+    for (const auto& item: objects) {
+        if (item->segment == UnlinkedMBC::StaticObject::string_literal) {
+            string_literal_cnt++;
+        } else if (item->segment == UnlinkedMBC::StaticObject::data) {
+            data_cnt++;
+        } else if (item->segment == UnlinkedMBC::StaticObject::bss) {
+            bss_cnt++;
+        }
+    }
+    uint64_t cur_string_literal = 0;
+    uint64_t cur_data = string_literal_cnt;
+    uint64_t cur_bss = string_literal_cnt + data_cnt;
+    uint64_t cur_thread_local = string_literal_cnt + data_cnt + bss_cnt;
+    for (auto& item: objects) {
+        if (item->segment == UnlinkedMBC::StaticObject::string_literal) {
+            std::swap(item, objects[cur_string_literal++]);
+        } else if (item->segment == UnlinkedMBC::StaticObject::data) {
+            std::swap(item, objects[cur_data++]);
+        } else if (item->segment == UnlinkedMBC::StaticObject::bss) {
+            std::swap(item, objects[cur_bss++]);
+        } else {
+            std::swap(item, objects[cur_thread_local++]);
+        }
+    }
+    return {string_literal_cnt, string_literal_cnt + data_cnt, string_literal_cnt + data_cnt + bss_cnt};
+}
+
+ObjectLayout arrange(UnlinkedMBC& unlinked_mbc)
+{
+    arrangeFunction(unlinked_mbc.functions);
+    return arrangeObject(unlinked_mbc.objects);
+}
+
+void relocate(UnlinkedMBC& unlinked_mbc, const uint64_t static_object_cnt)
+{
+    std::map<std::string, uint64_t> sym_map;
+    for (size_t i = 0; i < unlinked_mbc.types.size(); ++i) {
+        sym_map.emplace(lib::format("#${}", *unlinked_mbc.types[i]), i);
+    }
+    for (size_t i = 0; i < unlinked_mbc.constants.size(); ++i) {
+        sym_map.emplace(lib::format("<${}; ${}>", *unlinked_mbc.constants[i].first, unlinked_mbc.constants[i].second),
+                        i);
+    }
+    for (size_t i = 0; i < unlinked_mbc.functions.size(); ++i) {
+        if (!sym_map.emplace(unlinked_mbc.functions[i]->name, InstrInfo::IdentifierId::fromFunctionIndex(i)).second) {
+            throw DuplicatedSymbolException{unlinked_mbc.functions[i]->name};
+        }
+    }
+    for (size_t i = 0; i < static_object_cnt; ++i) {
+        if (!sym_map.emplace(unlinked_mbc.objects[i]->name, InstrInfo::IdentifierId::fromStaticObject(i)).second) {
+            throw DuplicatedSymbolException{unlinked_mbc.objects[i]->name};
+        }
+    }
+    for (auto& func: unlinked_mbc.functions) {
+        for (const auto& [offset, symbol]: func->relocate) {
+            auto itr = sym_map.find(symbol);
+            if (itr == sym_map.end()) {
+                throw CannotFoundSymbolException{symbol};
+            }
+            auto id = itr->second;
+            func->code[offset + 1] = static_cast<uint8_t>(id);
+            func->code[offset + 2] = static_cast<uint8_t>(id >> 8);
+            func->code[offset + 3] = static_cast<uint8_t>(id >> 16);
+        }
+        func->relocate.clear();
+    }
+    // relocate of data will be done by am on loading bytecode
+}
+
+lib::Array<ValueBox> makeConstants(lib::Slice<const std::pair<const ts::Type*, uint64_t>> constants)
 {
     using ts::Kind;
     lib::Array<ValueBox> result(constants.length());
@@ -598,76 +405,133 @@ lib::Array<ValueBox> makeConstants(const lib::Array<std::pair<const ts::Type*, u
     return result;
 }
 
-} // anonymous namespace
-
-std::unique_ptr<MBC> Linker::link(const lib::Array<const MBC*>& mbcs, const LinkOption& option)
+lib::Array<am::spd::Block> makeBlocks(std::vector<UnlinkedMBC::Block>& blocks)
 {
-    ASSERT(mbcs.length() > 0, "cannot link empty files");
-    ASSERT(std::all_of(mbcs.begin(), mbcs.end(),
-                       [](const MBC* mbc) { return mbc->attribute.type == MBC::Type::object_file; }),
-           "only object file can be linked");
-    auto attribute = linkAttribute(mbcs, option.type);
-    ASSERT(option.type == MBC::Type::object_file || attribute.static_links.empty(), "missing static link files");
-    std::string file_name = "<no file: linker generated>";
-    std::string comment = "linked by CAMI";
-    auto types = mergeTypes(mbcs);
-    auto constants = mergeConstants(mbcs);
-    auto bss = linkBss({mbcs, FIELD_GETTER(bss)});
-    auto data = linkData({mbcs, FIELD_GETTER(data)});
-    auto string_literal = linkData({mbcs, FIELD_GETTER(string_literal)});
-    auto thread_local_ = linkData({mbcs, FIELD_GETTER(thread_local_)});
-    auto stack_init_result = mergeData({mbcs, FIELD_GETTER(stack_init)});
-    auto code = linkCode({mbcs, FIELD_GETTER(code)}, stack_init_result);
-    auto init_code = linkCode({mbcs, FIELD_GETTER(init_code)}, stack_init_result);
-    auto thread_local_init_code = linkCode({mbcs, FIELD_GETTER(thread_local_init_code)}, stack_init_result);
-    if (types.length() > InstrInfo::ID_MAX) {
-        throw IDExceedException{"type"};
-    }
-    if (constants.length() > InstrInfo::ID_MAX) {
-        throw IDExceedException{"constants"};
-    }
-    if (code.functions.length() + 2 > InstrInfo::FUNCTION_ID_MAX) {
-        throw IDExceedException{"functions"};
-    }
-    if (bss.objects.length() + data.objects.length() + string_literal.objects.length() >
-        InstrInfo::STATIC_OBJECT_ID_MAX) {
-        throw IDExceedException{"objects"};
-    }
-    if (option.type != MBC::Type::object_file) {
-        relocate(types, constants, code, init_code, thread_local_init_code, bss, data, string_literal, thread_local_);
-        mergeInitCode(code, init_code, thread_local_init_code);
-        mergeBssStringLiteralObject(data, bss, string_literal);
-        if (option.type == MBC::Type::executable || option.type == MBC::Type::fix_address_executable) {
-            auto [entry_id, entry_func] = findEntry(code, attribute.module_or_entry_name);
-            attribute.entry = entry_func;
-            insertBootCode(code, entry_id);
-            if (option.type == MBC::Type::fix_address_executable) {
-                fixAddress(data, code);
+    using am::spd::AutomaticObjectDescription;
+    lib::Array<am::spd::Block> result(blocks.size());
+    for (size_t i = 0; i < result.length(); ++i) {
+        lib::Array<AutomaticObjectDescription> objects(blocks[i].automatic_objects.size());
+        for (size_t j = 0; j < objects.length(); ++j) {
+            auto& src = blocks[i].automatic_objects[j];
+            std::unique_ptr<uint8_t[]> init_data{};
+            if (!src.init_data.empty()) {
+                init_data = std::unique_ptr<uint8_t[]>{new uint8_t[src.init_data.size()]};
+                std::memcpy(init_data.get(), src.init_data.data(), src.init_data.size());
             }
+            objects.init(j, std::move(src.name), src.id, *src.type, src.offset, std::move(init_data));
         }
+        result.init(i, std::move(objects));
     }
-    return std::make_unique<MBC>(std::move(file_name), std::move(attribute), std::move(comment), std::move(bss),
-                                 std::move(data),
-                                 std::move(string_literal), std::move(stack_init_result.data), std::move(thread_local_),
-                                 std::move(code),
-                                 std::move(init_code), std::move(thread_local_init_code), std::move(types),
-                                 std::move(constants));
+    return result;
 }
 
-am::spd::InitializeDescription Linker::spawn(std::unique_ptr<MBC> _mbc)
+lib::Array<am::FullExprInfo> makeFullExprInfos(std::vector<UnlinkedMBC::FullExprInfo>& src)
 {
-    using ts::Type;
-    auto& mbc = *_mbc;
-    ASSERT(mbc.attribute.type != MBC::Type::object_file, "cannot spawn from object file");
-    ASSERT(mbc.attribute.type != MBC::Type::shared_object, "not supported now");
-    if (mbc.attribute.type != MBC::Type::fix_address_executable) {
-        fixAddress(mbc.data, mbc.code);
+    lib::Array<am::FullExprInfo> result(src.size());
+    for (size_t i = 0; i < result.length(); ++i) {
+        result.init(i, src[i].trace_event_cnt, lib::Array<uint8_t>::fromVector(src[i].sequence_after_graph),
+                    lib::Array<std::pair<uint64_t, uint64_t>>::fromVector(src[i].source_location));
     }
-    auto bss_offset = lib::roundUp(mbc.data.bin.length(), mbc.bss.align);
-    uint64_t string_literal_begin =
-            am::layout::DATA_BASE + lib::roundUp(bss_offset + mbc.bss.len, mbc.string_literal.align);
-    makeDataMemoryLayout(mbc.data, mbc.bss, mbc.string_literal);
-    lib::Array<ValueBox> constants = makeConstants(mbc.constants);
-    return {std::move(mbc.code.bin), std::move(mbc.data.bin), string_literal_begin, std::move(mbc.data.objects),
-            std::move(constants), std::move(mbc.types), std::move(mbc.code.functions), std::move(mbc.stack_init.bin)};
+    return result;
+}
+
+std::pair<lib::Array<Function>, lib::Array<uint8_t>> makeFunctions(UnlinkedMBC& unlinked_mbc)
+{
+    using am::spd::SourceCodeLocator;
+    lib::Array<Function> functions(unlinked_mbc.functions.size());
+    uint64_t addr = 0;
+    for (size_t i = 0; i < functions.length(); ++i) {
+        auto& src = *unlinked_mbc.functions[i];
+        functions.init(i, std::move(src.name), *src.effective_type, addr, std::move(src.file_name), src.frame_size,
+                       src.code.size(), src.max_object_num, makeBlocks(src.blocks),
+                       makeFullExprInfos(src.full_expr_infos),
+                       SourceCodeLocator{lib::Array<SourceCodeLocator::Item>::fromVector(src.func_locator.data)});
+        addr += src.code.size();
+    }
+    lib::Array<uint8_t> code(addr);
+    for (int i = 0; i < functions.length(); ++i) {
+        std::memcpy(&code[functions[i].address], unlinked_mbc.functions[i]->code.data(), functions[i].code_size);
+    }
+    return {std::move(functions), std::move(code)};
+}
+
+auto makeObjects(UnlinkedMBC& unlinked_mbc, const ObjectLayout& object_layout)
+-> std::tuple<lib::Array<StaticObjectDescription>, lib::Array<uint8_t>, std::vector<LinkedMBC::RelocateEntry>, uint64_t, uint64_t>
+{
+    std::vector<LinkedMBC::RelocateEntry> data_relocate;
+    lib::Array<StaticObjectDescription> static_objects(object_layout.staticObjectCnt());
+    uint64_t addr = 0;
+    uint64_t idx = 0;
+    uint64_t end = object_layout.data_begin;
+    uint64_t string_literal_len, non_bss_data_len;
+    enum {
+        string_literal, data_, bss
+    } state = string_literal;
+    while (true) {
+        for (; idx < end; ++idx) {
+            auto& src = *unlinked_mbc.objects[idx];
+            addr = lib::roundUp(addr, src.type->align());
+            static_objects.init(idx, std::move(src.name), src.type, addr);
+            if (!src.relocate_symbol.empty()) {
+                data_relocate.emplace_back(addr, std::move(src.relocate_symbol));
+            }
+            addr += src.type->size();
+        }
+        if (state == string_literal) {
+            string_literal_len = addr;
+            end = object_layout.bss_begin;
+            state = data_;
+        } else if (state == data_) {
+            non_bss_data_len = addr;
+            end = object_layout.staticObjectCnt();
+            state = bss;
+        } else {
+            break;
+        }
+    }
+    lib::Array<uint8_t> data(non_bss_data_len);
+    std::memset(data.data(), 0, addr);
+    for (int i = 0; i < object_layout.bss_begin; ++i) {
+        std::memcpy(&data[static_objects[i].address], unlinked_mbc.objects[i]->value.data(),
+                    static_objects[i].type->size());
+    }
+    return {std::move(static_objects), std::move(data), std::move(data_relocate), string_literal_len,
+            addr - non_bss_data_len};
+}
+
+std::unique_ptr<LinkedMBC> makeLinkedMBC(std::unique_ptr<UnlinkedMBC> unlinked_mbc, const LinkOption& option,
+                                         const ObjectLayout& object_layout)
+{
+    auto types = lib::Array<const ts::Type*>::fromVector(unlinked_mbc->types);
+    auto constants = makeConstants(unlinked_mbc->constants);
+    auto [functions, code] = makeFunctions(*unlinked_mbc);
+    auto [static_objects, data, data_relocate, string_literal_end, bss_size] = makeObjects(*unlinked_mbc, object_layout);
+    unlinked_mbc->attribute.type = option.type;
+    if (option.type == MBC::Type::executable) {
+        auto itr = std::find_if(functions.begin(), functions.end(), [&](const Function& func) {
+            return func.name == unlinked_mbc->attribute.module_or_entry_name;
+        });
+        ASSERT(itr != functions.end(), "entry name should be checked in `relocate`");
+        unlinked_mbc->attribute.entry = &*itr;
+    }
+    return std::make_unique<LinkedMBC>(std::move(unlinked_mbc->source_name), std::move(unlinked_mbc->attribute),
+                                       std::move(unlinked_mbc->comment), std::move(code), std::move(data),
+                                       string_literal_end, bss_size, std::move(static_objects), std::move(constants),
+                                       std::move(types), std::move(functions), std::move(data_relocate));
+}
+} // anonymous namespace
+
+std::unique_ptr<MBC> Linker::link(std::vector<std::unique_ptr<UnlinkedMBC>> mbcs, const LinkOption& option)
+{
+    ASSERT(!mbcs.empty(), "cannot link empty files");
+    auto unlinked_mbc = makeUnlinkedMBC({mbcs.data(), mbcs.size()}, option);
+    if (option.type == MBC::Type::object_file) {
+        return unlinked_mbc;
+    }
+    if (option.type == MBC::Type::executable) {
+        insertBootFunction(*unlinked_mbc);
+    }
+    auto arrange_result = arrange(*unlinked_mbc);
+    relocate(*unlinked_mbc, arrange_result.staticObjectCnt());
+    return makeLinkedMBC(std::move(unlinked_mbc), option, arrange_result);
 }

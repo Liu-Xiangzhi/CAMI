@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <lib/array.h>
+#include <lib/downcast.h>
 #include <am/spd.h>
 #include <foundation/value.h>
 #include <string>
@@ -34,8 +35,8 @@ using std::operator ""sv;
  *
  * @code
  * begin ::= {section}
- * section ::= attributes | comment | objects | functions |
- *             types | data | code | bss
+ * section ::= attributes | comment | types |
+ *             objects | functions
  * attributes ::= '.attribute' {attribute}
  * attribute ::= version | type | [entry] | [mod_name] |
  *               [static_link] | [dynamic_link]
@@ -48,34 +49,38 @@ using std::operator ""sv;
  * dynamic_link ::= 'DYNAMIC_LINK' files
  * files ::= '[' string {',' string} [','] ']'
  * comment ::= '.comment' {string}
- * objects ::= ('.object' | '.object.string_literal' |
- *             '.object.bss' | '.object.thread_local')
- *             '[' {object} ']'
+ * objects ::= '.object' '[' {object} ']'
  * object ::= '{'
+ *                  'segment' : object_segment
  *                  'name' ':' string
- *                  'address' ':' integer
  *                  'type' ':' type_specifier
+ *                  ['value' ':' bin]
+ *                  ['relocate' ':' string]
  *            '}'
  * functions ::= '.function' '['{ function }']'
  * function ::= '{'
+ *                  'segment' ':' function_segment
  *                  'name' ':' string
- *                  'address' ':' integer
  *                  'type' ':' type_specifier
- *                  'frame_size' ':' integer
- *                  'code_size' ':' integer
- *                  'max_object_num' ':' integer
  *                  'file_name' ':' string
+ *                  'frame_size' ':' integer
+ *                  'max_object_num' ':' integer
  *                  'blocks' ':' '[' {block} ']'
  *                  'full_expressions' ':' '['{full_expr}']'
  *                  'debug' ':' '[' {debug_loc_info} ']'
+ *                  'code' ':' {code_line} '.'
  *              '}'
- * block ::= '[' {stack_object} ']'
- * stack_object ::= '{'
+ * data_segment ::= 'string_literal' | 'data' |
+ *                  'bss' | 'thread_local'
+ * function_segment ::= 'execute' | 'init' |
+ *                      'thread_local_init'
+ * block ::= '[' {automatic_object} ']'
+ * automatic_object ::= '{'
  *                      'name' ':' string
  *                      'dsg_id' ':' integer
  *                      'type' ':' type_specifier
  *                      'offset' ':' integer
- *                      'init_data_offset' ':' integer
+ *                      ['init_data' ':' bin]
  *                  '}'
  * full_expr ::= '{'
  *                  'trace_event_cnt' ':' integer
@@ -106,19 +111,13 @@ using std::operator ""sv;
  *                ('struct' | 'union') string
  * qualifier ::= 'const' | 'volatile' |
  *               'restrict' | 'atomic'
- * data ::= ('.data' | '.data.thread_local' | '.stack_init'|
- *          '.string_literal') 'ALIGN' integer bin
- * bin ::= {hex_sequence | string}
- * code ::= ('.code' | '.code.init' |
- *           '.code.init_thread_local')
- *          {code_line}
+ * bin ::= {hex_sequence | string} '.'
  * code_line ::= [label] [instr [info]]
  * label ::= unquote_string ':'
  * instr ::= unquote_string
  * info ::= type_specifier | constant | integer |
  *          unquote_string
  * constant ::= '&lt;' type_specifier [';' number] '>'
- * bss ::= '.bss' 'ALIGN' integer integer
  * @endcode
  *
  * @lexical
@@ -166,12 +165,19 @@ using std::operator ""sv;
  * @endcode
  */
 
+// text form bytecode
+struct TBC
+{
+    std::string text;
+    std::string_view name;
+};
+
 // memory form bytecode
 struct MBC
 {
     enum class Type
     {
-        object_file, executable, fix_address_executable, shared_object,
+        object_file, executable, shared_object,
     };
     struct Attribute
     {
@@ -179,78 +185,147 @@ struct MBC
         Type type;
         std::string module_or_entry_name;
         const am::spd::Function* entry;
-        lib::Array<std::string> static_links;
-        lib::Array<std::string> dynamic_links;
+        std::vector<std::string> static_links;
+        std::vector<std::string> dynamic_links;
     };
-
-    struct BSS
-    {
-        uint64_t align = 1;
-        uint64_t len = 0;
-        lib::Array<am::spd::StaticObjectDescription> objects;
-        BSS() = default;
-
-        BSS(uint64_t align, uint64_t len, lib::Array<am::spd::StaticObjectDescription> objects)
-                : align(align), len(len), objects(std::move(objects)) {}
-    };
-
-    struct Data
-    {
-        uint64_t align = 1;
-        lib::Array<uint8_t> bin;
-        lib::Array<am::spd::StaticObjectDescription> objects;
-        Data() = default;
-
-        Data(uint64_t align, lib::Array<uint8_t> bin, lib::Array<am::spd::StaticObjectDescription> objects)
-                : align(align), bin(std::move(bin)), objects(std::move(objects)) {}
-    };
-
-    struct Code
-    {
-        lib::Array<uint8_t> bin;
-        lib::Array<am::spd::Function> functions;
-        lib::Array<std::pair<uint64_t, std::string>> relocate;
-        Code() = default;
-
-        Code(lib::Array<uint8_t> bin, lib::Array<am::spd::Function> functions,
-             lib::Array<std::pair<uint64_t, std::string>> relocate)
-                : bin(std::move(bin)), functions(std::move(functions)), relocate(std::move(relocate)) {}
-
-        void clear()
-        {
-            this->bin.clear();
-            this->functions.clear();
-            this->relocate.clear();
-        }
-    };
-
     std::string source_name;
     Attribute attribute;
     std::string comment;
-    BSS bss;
-    Data data;
-    Data string_literal;
-    Data stack_init;
-    Data thread_local_;
-    Code code;
-    Code init_code;
-    Code thread_local_init_code;
-    lib::Array<const ts::Type*> types;
-    // only contains integer/floating/nullptr_t
-    lib::Array<std::pair<const ts::Type*, uint64_t>> constants;
     MBC() = default;
 
-    MBC(std::string source_name, Attribute attribute, std::string comment, BSS bss,
-        Data data, Data string_literal, Data stack_init, Data thread_local_, Code code,
-        Code init_code, Code thread_local_init_code, lib::Array<const ts::Type*> types,
-        lib::Array<std::pair<const ts::Type*, uint64_t>> constants)
-            : source_name(std::move(source_name)), attribute(std::move(attribute)), comment(std::move(comment)),
-              bss(std::move(bss)), data(std::move(data)), string_literal(std::move(string_literal)),
-              stack_init(std::move(stack_init)), thread_local_(std::move(thread_local_)),
-              code(std::move(code)), init_code(std::move(init_code)),
-              thread_local_init_code(std::move(thread_local_init_code)), types(std::move(types)),
-              constants(std::move(constants)) {}
+    MBC(std::string source_name, Attribute attribute, std::string comment) :
+            source_name(std::move(source_name)), attribute(std::move(attribute)), comment(std::move(comment)) {}
+
+    DEBUG_VIRTUAL ~MBC() = default;
 };
+
+struct UnlinkedMBC : public MBC
+{
+    struct StaticObject
+    {
+        enum Segment
+        {
+            string_literal, data, bss, thread_local_
+        } segment;
+        std::string name;
+        const ts::Type* type;
+        std::vector<uint8_t> value;
+        // for address constant only, the address of entity referenced by `relocate_symbol` will be added into `value`
+        std::string relocate_symbol;
+
+        StaticObject(Segment segment, std::string name, const ts::Type* type, std::vector<uint8_t> value, std::string relocate_symbol)
+                : segment(segment), name(std::move(name)), type(type), value(std::move(value)),
+                  relocate_symbol(std::move(relocate_symbol)) {}
+    };
+
+    struct AutomaticObject
+    {
+        std::string name;
+        size_t id;
+        const ts::Type* type;
+        uint64_t offset;
+        std::vector<uint8_t> init_data;
+    };
+
+    struct RelocateEntry
+    {
+        uint64_t instr_offset;
+        std::string symbol;
+
+        RelocateEntry(uint64_t instr_offset, std::string symbol)
+                : instr_offset(instr_offset), symbol(std::move(symbol)) {}
+    };
+
+    struct Block
+    {
+        std::vector<AutomaticObject> automatic_objects;
+    };
+    struct FullExprInfo
+    {
+        uint64_t trace_event_cnt;
+        std::vector<uint8_t> sequence_after_graph;
+        std::vector<std::pair<uint64_t, uint64_t>> source_location;
+    };
+    struct SourceLocator
+    {
+        std::vector<am::spd::SourceCodeLocator::Item> data;
+    };
+
+    struct Function
+    {
+        enum Segment
+        {
+            execute, init, thread_local_init,
+        } segment{};
+        std::string name;
+        const ts::Type* effective_type{};
+        std::string file_name;
+        size_t frame_size{};
+        size_t max_object_num{};
+        std::vector<Block> blocks;
+        std::vector<FullExprInfo> full_expr_infos;
+        SourceLocator func_locator;
+        std::vector<uint8_t> code;
+        std::vector<RelocateEntry> relocate;
+        Function() = default;
+
+        Function(Segment segment, std::string name, const ts::Type* effective_type, std::string file_name, size_t frame_size,
+                 size_t max_object_num, std::vector<Block> blocks, std::vector<FullExprInfo> full_expr_infos,
+                 SourceLocator func_locator, std::vector<uint8_t> code, std::vector<RelocateEntry> relocate)
+                : segment(segment), name(std::move(name)), effective_type(effective_type),
+                  file_name(std::move(file_name)), frame_size(frame_size), max_object_num(max_object_num),
+                  blocks(std::move(blocks)), full_expr_infos(std::move(full_expr_infos)), func_locator(std::move(func_locator)),
+                  code(std::move(code)), relocate(std::move(relocate)) {}
+    };
+
+    std::vector<std::unique_ptr<StaticObject>> objects;
+    std::vector<std::unique_ptr<Function>> functions;
+    std::vector<const ts::Type*> types;
+    // only contains integer/floating/nullptr_t
+    std::vector<std::pair<const ts::Type*, uint64_t>> constants;
+    UnlinkedMBC() = default;
+
+    UnlinkedMBC(std::string source_name, Attribute attribute, std::string comment,
+                std::vector<std::unique_ptr<StaticObject>> objects,
+                std::vector<std::unique_ptr<Function>> functions, std::vector<const ts::Type*> types,
+                std::vector<std::pair<const ts::Type*, uint64_t>> constants)
+            : MBC(std::move(source_name), std::move(attribute), std::move(comment)), objects(std::move(objects)),
+              functions(std::move(functions)), types(std::move(types)), constants(std::move(constants)) {}
+};
+
+struct LinkedMBC : public MBC
+{
+    lib::Array<uint8_t> code;
+    lib::Array<uint8_t> data;
+    uint64_t string_literal_len;
+    uint64_t bss_size;
+    lib::Array<am::spd::StaticObjectDescription> static_objects;
+    lib::Array<ValueBox> constants;
+    lib::Array<const ts::Type*> types;
+    lib::Array<am::spd::Function> functions;
+
+    struct RelocateEntry
+    {
+        uint64_t offset;
+        std::string symbol;
+
+        RelocateEntry(uint64_t offset, std::string symbol) : offset(offset), symbol(std::move(symbol)) {}
+    };
+
+    std::vector<RelocateEntry> data_relocate;
+
+    LinkedMBC(std::string source_name, Attribute attribute, std::string comment,
+              lib::Array<uint8_t> code, lib::Array<uint8_t> data, uint64_t string_literal_len, uint64_t bss_size,
+              lib::Array<am::spd::StaticObjectDescription> static_objects, lib::Array<ValueBox> constants,
+              lib::Array<const ts::Type*> types, lib::Array<am::spd::Function> functions,
+              std::vector<RelocateEntry> data_relocate) :
+            MBC(std::move(source_name), std::move(attribute), std::move(comment)), code(std::move(code)),
+            data(std::move(data)), string_literal_len(string_literal_len), bss_size(bss_size),
+            static_objects(std::move(static_objects)), constants(std::move(constants)),
+            types(std::move(types)), functions(std::move(functions)),
+            data_relocate(std::move(data_relocate)) {}
+};
+
 /// binary form bytecode
 /// @note out of date
 //struct BBC
@@ -370,5 +445,4 @@ struct MBC
 //    array_t<FileSourceLocator> file_source_locator;
 //};
 }
-
 #endif //CAMI_TRANSLATE_BYTECODE_H

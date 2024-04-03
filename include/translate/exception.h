@@ -36,13 +36,6 @@ public:
             : std::runtime_error(std::string{"link error: "}.append(what)) {}
 };
 
-class IDExceedException : public LinkException
-{
-public:
-    explicit IDExceedException(std::string_view id_type)
-            : LinkException(lib::format("Too many ${}s, id maximum(0xff'ff'ff) exceeded", id_type)) {}
-};
-
 class MissingModuleOrEntryNameException : public LinkException
 {
 public:

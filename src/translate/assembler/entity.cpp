@@ -22,55 +22,192 @@
 
 using namespace cami;
 using namespace tr;
-using am::spd::StaticObjectDescription;
-using am::spd::Function;
-using am::spd::Block;
-using am::spd::AutomaticObjectDescription;
 using am::spd::SourceCodeLocator;
-using am::FullExprInfo;
+using StaticObject = UnlinkedMBC::StaticObject;
+using Function = UnlinkedMBC::Function;
+using Block = UnlinkedMBC::Block;
+using AutomaticObject = UnlinkedMBC::AutomaticObject;
+using FullExprInfo = UnlinkedMBC::FullExprInfo;
 
+namespace {
+// just a tag
+struct Bin
+{
+};
+}
 template<typename T>
-struct tr::ParseFunctionTrait
+struct tr::detail::ParseFunctionTrait
 {
 };
 template<>
-struct tr::ParseFunctionTrait<am::spd::Function>
+struct tr::detail::ParseFunctionTrait<std::unique_ptr<Function>>
 {
     static constexpr auto value = &Assembler::parseFunction;
 };
 template<>
-struct tr::ParseFunctionTrait<am::spd::StaticObjectDescription>
+struct tr::detail::ParseFunctionTrait<std::unique_ptr<StaticObject>>
 {
     static constexpr auto value = &Assembler::parseStaticObject;
 };
 template<>
-struct tr::ParseFunctionTrait<am::spd::AutomaticObjectDescription>
+struct tr::detail::ParseFunctionTrait<AutomaticObject>
 {
     static constexpr auto value = &Assembler::parseAutoObject;
 };
 template<>
-struct tr::ParseFunctionTrait<am::spd::Block>
+struct tr::detail::ParseFunctionTrait<Block>
 {
     static constexpr auto value = &Assembler::parseBlock;
 };
 template<>
-struct tr::ParseFunctionTrait<am::FullExprInfo>
+struct tr::detail::ParseFunctionTrait<FullExprInfo>
 {
     static constexpr auto value = &Assembler::parseFullExprInfo;
 };
 template<>
-struct tr::ParseFunctionTrait<std::pair<uint64_t, uint64_t>>
+struct tr::detail::ParseFunctionTrait<std::pair<uint64_t, uint64_t>>
 {
     static constexpr auto value = &Assembler::parseFullExprSourceLocationPair;
 };
 template<>
-struct tr::ParseFunctionTrait<am::spd::SourceCodeLocator::Item>
+struct tr::detail::ParseFunctionTrait<am::spd::SourceCodeLocator::Item>
 {
     static constexpr auto value = &Assembler::parseDebugLocInfo;
 };
 
+template<>
+std::string Assembler::parseKV<std::string>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return {};
+    }
+    auto token = this->nextToken();
+    if (!Token::isString(token->type)) {
+        this->diagnostic(token->begin, "expect string");
+        return {};
+    }
+    return std::move(down_cast<StringToken&>(token).value);
+}
+
+template<>
+uint64_t Assembler::parseKV<uint64_t>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return 0;
+    }
+    auto token = this->nextToken();
+    if (token->type != Token::Type::integer) {
+        this->diagnostic(token->begin, "expect integer");
+        return 0;
+    }
+    return down_cast<IntegerToken&>(token).value;
+}
+
+template<>
+const ts::Type* Assembler::parseKV<const ts::Type*>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return nullptr;
+    }
+    if (auto type = this->parseTypeSpecifier();type) {
+        return *type;
+    }
+    return {};
+}
+
+template<>
+StaticObject::Segment Assembler::parseKV<StaticObject::Segment>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return StaticObject::data;
+    }
+    auto token = this->nextToken();
+    if (!Token::isString(token->type)) {
+        this->diagnostic(token->begin, "expect string");
+        return {};
+    }
+    auto& value = down_cast<StringToken&>(token).value;
+    if (value == "string_literal"sv) {
+        return StaticObject::string_literal;
+    }
+    if (value == "data"sv) {
+        return StaticObject::data;
+    }
+    if (value == "bss"sv) {
+        return StaticObject::bss;
+    }
+    if (value == "thread_local"sv) {
+        return StaticObject::thread_local_;
+    }
+    this->diagnostic(token->begin, "invalid object segment");
+    return {};
+}
+
+template<>
+Function::Segment Assembler::parseKV<Function::Segment>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return Function::execute;
+    }
+    auto token = this->nextToken();
+    if (!Token::isString(token->type)) {
+        this->diagnostic(token->begin, "expect string");
+        return {};
+    }
+    auto& value = down_cast<StringToken&>(token).value;
+    if (value == "execute"sv) {
+        return Function::execute;
+    }
+    if (value == "init"sv) {
+        return Function::init;
+    }
+    if (value == "thread_local_init"sv) {
+        return Function::thread_local_init;
+    }
+    this->diagnostic(token->begin, "invalid function segment");
+    return {};
+}
+
+template<>
+std::vector<uint8_t> Assembler::parseKV<Bin>(std::string_view key)
+{
+    if (!this->parseKeyValueCommonCheck(key)) {
+        return {};
+    }
+    return this->parseBin();
+}
+
+template<typename T, typename P>
+P Assembler::parseKV(std::string_view)
+{
+    static_assert(!std::is_same_v<T, T>, "invalid value type");
+}
+
+bool Assembler::parseKeyValueCommonCheck(std::string_view key)
+{
+    auto token = this->nextToken();
+    if (token->type != Token::Type::unquote_string) {
+        this->diagnostic(token->begin, "expect unquoted string");
+        this->skipTo({Token::Type::unquote_string});
+        token = this->nextToken();
+        if (token->type == Token::Type::section_name || token->type == Token::Type::end) {
+            return false;
+        }
+    }
+    bool pass = true;
+    if (key != down_cast<StringToken&>(token).value) {
+        this->diagnostic(token->begin, lib::format("expect '${}'", key));
+        pass = false;
+    }
+    if ((token = this->nextToken())->type != Token::Type::colon) {
+        this->diagnostic(token->begin, "expect ':'");
+        pass = false;
+    }
+    return pass;
+}
+
 template<typename T>
-lib::Array<T> Assembler::parseLists()
+std::vector<T> Assembler::parseLists()
 {
     auto token = this->nextToken();
     if (token->type != Token::Type::lbracket) {
@@ -78,58 +215,63 @@ lib::Array<T> Assembler::parseLists()
         this->skipTo({Token::Type::lbracket});
         this->nextToken();
     }
-    if ((token = this->nextToken())->type == Token::Type::rbracket) {
+    if (this->peek().type == Token::Type::rbracket) {
+        this->nextToken();
         return {};
     }
-    this->putBack(std::move(token));
     std::vector<T> sub_elements;
     while (true) {
-        sub_elements.push_back((this->*ParseFunctionTrait<T>::value)());
-        token = this->nextToken();
-        if (token->type == Token::Type::section_name || token->type == Token::Type::end) {
-            this->diagnostic(token->begin, "unclosed bracket");
-            this->putBack(std::move(token));
+        sub_elements.push_back((this->*detail::ParseFunctionTrait<T>::value)());
+        if (auto& next = this->peek();next.type == Token::Type::section_name || next.type == Token::Type::end) [[unlikely]] {
+            this->diagnostic(next.begin, "unclosed bracket");
             break;
         }
-        if (token->type == Token::Type::rbracket) {
+        if (this->peek().type == Token::Type::rbracket) {
+            this->nextToken();
             break;
         }
-        this->putBack(std::move(token));
     }
-    return lib::Array<T>::fromVector(std::move(sub_elements));
+    return sub_elements;
 }
 
-void Assembler::parseObjectsCommon(lib::Array<StaticObjectDescription>& result)
+void Assembler::parseObjects()
 {
-    result.assign(this->parseLists<StaticObjectDescription>());
+    this->mbc->objects = this->parseLists<std::unique_ptr<StaticObject>>();
 }
 
-void Assembler::parseFunctionsCommon(lib::Array<Function>& result)
+void Assembler::parseFunctions()
 {
-    result.assign(this->parseLists<Function>());
+    this->mbc->functions = this->parseLists<std::unique_ptr<Function>>();
 }
 
-StaticObjectDescription Assembler::parseStaticObject()
+std::unique_ptr<StaticObject> Assembler::parseStaticObject()
 {
-    StaticObjectDescription result;
     auto token = this->nextToken();
     if (token->type != Token::Type::lbrace) {
         this->diagnostic(token->begin, "expect '{'");
         this->skipTo({Token::Type::lbrace});
         this->nextToken();
     }
-    this->parseKeyValuePair("name"sv, result.name);
-    this->parseKeyValuePair("address"sv, result.address);
-    this->parseKeyValuePair("type"sv, result.type);
+    auto segment = this->parseKV<StaticObject::Segment>("segment"sv);
+    auto name = this->parseKV<std::string>("name"sv);
+    auto type = this->parseKV<const ts::Type*>("type"sv);
+    std::vector<uint8_t> value;
+    if (segment != StaticObject::bss) {
+        value = this->parseKV<Bin, std::vector<uint8_t>>("value"sv);
+    }
+    std::string relocate;
+    if (this->peek().type != Token::Type::rbrace) {
+        relocate = this->parseKV<std::string>("relocate"sv);
+    }
     if ((token = this->nextToken())->type != Token::Type::rbrace) {
         this->diagnostic(token->begin, "expect '}'");
         this->skipTo({Token::Type::rbrace});
         this->nextToken();
     }
-    return result;
+    return std::make_unique<StaticObject>(segment, std::move(name), type, std::move(value), std::move(relocate));
 }
 
-Function Assembler::parseFunction()
+std::unique_ptr<Function> Assembler::parseFunction()
 {
     auto token = this->nextToken();
     if (token->type != Token::Type::lbrace) {
@@ -138,36 +280,27 @@ Function Assembler::parseFunction()
         this->nextToken();
     }
     using ts::Type;
-    std::string name;
-    std::string func_file_name;
-    uint64_t address{};
-    uint64_t frame_size{};
-    uint64_t code_size{};
-    uint64_t max_object_num{};
-    const Type* type{};
-    this->parseKeyValuePair("name"sv, name);
-    this->parseKeyValuePair("address"sv, address);
-    this->parseKeyValuePair("type"sv, type);
-    this->parseKeyValuePair("frame_size"sv, frame_size);
-    this->parseKeyValuePair("code_size"sv, code_size);
-    this->parseKeyValuePair("max_object_num"sv, max_object_num);
-    this->parseKeyValuePair("file_name"sv, func_file_name);
+    auto segment = this->parseKV<Function::Segment>("segment"sv);
+    auto name = this->parseKV<std::string>("name"sv);
+    auto type = this->parseKV<const ts::Type*>("type"sv);
+    auto func_file_name = this->parseKV<std::string>("file_name"sv);
+    auto frame_size = this->parseKV<uint64_t>("frame_size"sv);
+    auto max_object_num = this->parseKV<uint64_t>("max_object_num");
     auto blocks = this->parseBlocks();
     auto full_expr_info = this->parseFullExprInfos();
     auto debug_loc_info = this->parseDebugLocInfos();
-    for (auto& item: debug_loc_info.data) {
-        item.addr += address;
-    }
+    auto [code, relocate] = this->parseCode();
     if ((token = this->nextToken())->type != Token::Type::rbrace) {
         this->diagnostic(token->begin, "expect '}'");
         this->skipTo({Token::Type::rbrace});
         this->nextToken();
     }
-    return {std::move(name), *type, address, std::move(func_file_name), frame_size, code_size, max_object_num,
-            std::move(blocks), std::move(full_expr_info), {}};
+    return std::make_unique<Function>(segment, std::move(name), type, std::move(func_file_name), frame_size, max_object_num,
+                                      std::move(blocks), std::move(full_expr_info), UnlinkedMBC::SourceLocator{std::move(debug_loc_info)},
+                                      std::move(code), std::move(relocate));
 }
 
-lib::Array<Block> Assembler::parseBlocks()
+std::vector<Block> Assembler::parseBlocks()
 {
     if (!this->parseKeyValueCommonCheck("blocks")) {
         return {};
@@ -177,10 +310,10 @@ lib::Array<Block> Assembler::parseBlocks()
 
 Block Assembler::parseBlock()
 {
-    return Block{this->parseLists<AutomaticObjectDescription>()};
+    return Block{this->parseLists<AutomaticObject>()};
 }
 
-AutomaticObjectDescription Assembler::parseAutoObject()
+AutomaticObject Assembler::parseAutoObject()
 {
     using ts::Type;
     auto token = this->nextToken();
@@ -189,25 +322,23 @@ AutomaticObjectDescription Assembler::parseAutoObject()
         this->skipTo({Token::Type::lbrace});
         this->nextToken();
     }
-    std::string name{};
-    uint64_t dsg_id{};
-    const Type* type{};
-    uint64_t offset{};
-    uint64_t init_data_offset{};
-    this->parseKeyValuePair("name"sv, name);
-    this->parseKeyValuePair("dsg_id"sv, dsg_id);
-    this->parseKeyValuePair("type"sv, type);
-    this->parseKeyValuePair("offset"sv, offset);
-    this->parseKeyValuePair("init_data_offset"sv, init_data_offset);
+    auto name = this->parseKV<std::string>("name"sv);
+    auto dsg_id = this->parseKV<uint64_t>("dsg_id"sv);
+    auto type = this->parseKV<const ts::Type*>("type"sv);
+    auto offset = this->parseKV<uint64_t>("offset");
+    std::vector<uint8_t> init_data;
+    if (this->peek().type != Token::Type::rbrace) {
+        init_data = this->parseKV<Bin, std::vector<uint8_t>>("init_data"sv);
+    }
     if ((token = this->nextToken())->type != Token::Type::rbrace) {
         this->diagnostic(token->begin, "expect '}'");
         this->skipTo({Token::Type::rbrace});
         this->nextToken();
     }
-    return {std::move(name), dsg_id, *type, offset, init_data_offset};
+    return {std::move(name), dsg_id, type, offset, std::move(init_data)};
 }
 
-lib::Array<FullExprInfo> Assembler::parseFullExprInfos()
+std::vector<FullExprInfo> Assembler::parseFullExprInfos()
 {
     if (!this->parseKeyValueCommonCheck("full_expressions")) {
         return {};
@@ -217,15 +348,14 @@ lib::Array<FullExprInfo> Assembler::parseFullExprInfos()
 
 FullExprInfo Assembler::parseFullExprInfo()
 {
-    uint64_t trace_event_cnt{};
     auto token = this->nextToken();
     if (token->type != Token::Type::lbrace) {
         this->diagnostic(token->begin, "expect '{'");
         this->skipTo({Token::Type::lbrace});
         this->nextToken();
     }
-    this->parseKeyValuePair("trace_event_cnt"sv, trace_event_cnt);
-    auto locations = this->parseFullExprSourceLocation();
+    auto trace_event_cnt = this->parseKV<uint64_t>("trace_event_cnt"sv);
+    auto locations = this->parseFullExprSourceLocation(trace_event_cnt);
     auto graph = this->parseFullExprSequenceAfterGraph(trace_event_cnt);
     if ((token = this->nextToken())->type != Token::Type::rbrace) {
         this->diagnostic(token->begin, "expect '}'");
@@ -235,12 +365,17 @@ FullExprInfo Assembler::parseFullExprInfo()
     return {trace_event_cnt, std::move(graph), std::move(locations)};
 }
 
-lib::Array<std::pair<uint64_t, uint64_t>> Assembler::parseFullExprSourceLocation()
+std::vector<std::pair<uint64_t, uint64_t>> Assembler::parseFullExprSourceLocation(uint64_t trace_event_cnt)
 {
+    auto source_location_offset = this->peek().begin;
     if (!this->parseKeyValueCommonCheck("source_location")) {
         return {};
     }
-    return this->parseLists<std::pair<uint64_t, uint64_t>>();
+    auto result = this->parseLists<std::pair<uint64_t, uint64_t>>();
+    if (result.size() != trace_event_cnt) {
+        this->diagnostic(source_location_offset, "number of source location don't match number of trace event");
+    }
+    return result;
 }
 
 std::pair<uint64_t, uint64_t> Assembler::parseFullExprSourceLocationPair()
@@ -273,7 +408,7 @@ std::pair<uint64_t, uint64_t> Assembler::parseFullExprSourceLocationPair()
     return result;
 }
 
-lib::Array<uint8_t> Assembler::parseFullExprSequenceAfterGraph(uint64_t trace_event_cnt)
+std::vector<uint8_t> Assembler::parseFullExprSequenceAfterGraph(uint64_t trace_event_cnt)
 {
     if (!this->parseKeyValueCommonCheck("sequence_after")) {
         return {};
@@ -303,8 +438,8 @@ lib::Array<uint8_t> Assembler::parseFullExprSequenceAfterGraph(uint64_t trace_ev
         this->putBack(std::move(token));
         adjacent_list_graph.push_back(this->parseIntegerList(trace_event_cnt - 1));
     }
-    lib::Array<uint8_t> bitmap_graph(lib::roundUpDiv(trace_event_cnt * trace_event_cnt, 8));
-    std::memset(bitmap_graph.data(), 0, bitmap_graph.length());
+    std::vector<uint8_t> bitmap_graph(lib::roundUpDiv(trace_event_cnt * trace_event_cnt, 8));
+    std::memset(bitmap_graph.data(), 0, bitmap_graph.size());
     if (adjacent_list_graph.size() != trace_event_cnt) {
         this->diagnostic(graph_offset, "number of member of sequence after graph don't match number of trace event");
         return bitmap_graph;
@@ -362,12 +497,12 @@ std::vector<uint64_t> Assembler::parseIntegerList(uint64_t max_value)
     return result;
 }
 
-SourceCodeLocator Assembler::parseDebugLocInfos()
+std::vector<SourceCodeLocator::Item> Assembler::parseDebugLocInfos()
 {
     if (!this->parseKeyValueCommonCheck("debug")) {
         return {};
     }
-    return SourceCodeLocator{this->parseLists<SourceCodeLocator::Item>()};
+    return this->parseLists<SourceCodeLocator::Item>();
 }
 
 SourceCodeLocator::Item Assembler::parseDebugLocInfo()
@@ -397,61 +532,27 @@ SourceCodeLocator::Item Assembler::parseDebugLocInfo()
     return SourceCodeLocator::Item{nums[0], nums[1], nums[2]};
 }
 
-void Assembler::parseKeyValuePair(std::string_view key, std::string& value)
+std::vector<uint8_t> Assembler::parseBin()
 {
-    if (!this->parseKeyValueCommonCheck(key)) {
-        return;
-    }
-    auto token = this->nextToken();
-    if (!Token::isString(token->type)) {
-        this->diagnostic(token->begin, "expect string");
-        return;
-    }
-    value = std::move(down_cast<StringToken&>(token).value);
-}
-
-void Assembler::parseKeyValuePair(std::string_view key, uint64_t& value)
-{
-    if (!this->parseKeyValueCommonCheck(key)) {
-        return;
-    }
-    auto token = this->nextToken();
-    if (token->type != Token::Type::integer) {
-        this->diagnostic(token->begin, "expect integer");
-        return;
-    }
-    value = down_cast<IntegerToken&>(token).value;
-}
-
-void Assembler::parseKeyValuePair(std::string_view key, const ts::Type*& value)
-{
-    if (!this->parseKeyValueCommonCheck(key)) {
-        return;
-    }
-    if (auto type = this->parseTypeSpecifier();type) {
-        value = *type;
-    }
-}
-
-bool Assembler::parseKeyValueCommonCheck(std::string_view key)
-{
-    auto token = this->nextToken();
-    if (token->type != Token::Type::unquote_string) {
-        this->diagnostic(token->begin, "expect unquoted string");
-        this->skipTo({Token::Type::unquote_string});
-        token = this->nextToken();
+    std::vector<uint8_t> hex_sequence;
+    while (true) {
+        auto token = this->nextToken();
         if (token->type == Token::Type::section_name || token->type == Token::Type::end) {
-            return false;
+            this->putBack(std::move(token));
+            break;
+        }
+        if (token->type == Token::Type::dot) {
+            break;
+        }
+        if (token->type == Token::Type::hex_sequence) {
+            auto& seq = down_cast<HexSequenceToken&>(token).value;
+            hex_sequence.insert(hex_sequence.end(), seq.begin(), seq.end());
+        } else if (Token::isString(token)) {
+            auto& str = down_cast<StringToken&>(token).value;
+            hex_sequence.insert(hex_sequence.end(), str.begin(), str.end());
+        } else {
+            this->diagnostic(token->begin, "expect hex_sequence or string");
         }
     }
-    bool pass = true;
-    if (key != down_cast<StringToken&>(token).value) {
-        this->diagnostic(token->begin, lib::format("expect '${}'", key));
-        pass = false;
-    }
-    if ((token = this->nextToken())->type != Token::Type::colon) {
-        this->diagnostic(token->begin, "expect ':'");
-        pass = false;
-    }
-    return pass;
+    return hex_sequence;
 }

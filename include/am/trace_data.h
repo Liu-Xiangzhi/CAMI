@@ -32,13 +32,14 @@ public:
     lib::Array<std::pair<uint64_t, uint64_t>> source_location; // (line, colum) indexed by inner_id
 
 public:
-    FullExprInfo(const uint64_t primary_expr_eva_cnt, lib::Array<uint8_t> graph,
+    FullExprInfo(const uint64_t trace_event_cnt, lib::Array<uint8_t> graph,
                  lib::Array<std::pair<uint64_t, uint64_t>> source_location)
-            : trace_event_cnt(primary_expr_eva_cnt), sequence_after_graph(std::move(graph)),
+            : trace_event_cnt(trace_event_cnt), sequence_after_graph(std::move(graph)),
               source_location(std::move(source_location))
     {
-        ASSERT(this->sequence_after_graph.length() >= lib::roundUpDiv(primary_expr_eva_cnt * primary_expr_eva_cnt, 8),
-               "invalid graph bitmap size");
+        ASSERT(this->sequence_after_graph.length() >= lib::roundUpDiv(trace_event_cnt * trace_event_cnt, 8),
+               "invalid graph bitmap length");
+        ASSERT(this->source_location.length() == this->trace_event_cnt, "invalid source_location length");
     }
 
     bool isSequenceAfter(uint32_t id1, uint32_t id2)
@@ -102,7 +103,7 @@ private:
     // only used by `dummy`
     TraceContext() : caller(*this), func_id(-1), ref_cnt(INT32_MAX),
                      call_point{.exec_id=UINT64_MAX, .full_expr_id = UINT32_MAX,
-                                .inner_id = InnerID::newMutualExclude(INT32_MAX)} {}
+                             .inner_id = InnerID::newMutualExclude(INT32_MAX)} {}
 
 public:
     static TraceContext dummy;

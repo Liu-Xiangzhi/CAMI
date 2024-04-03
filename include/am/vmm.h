@@ -130,7 +130,7 @@ class VirtualMemory
 
     lib::Array<uint8_t> code;
     lib::Array<uint8_t> data;
-    const uint64_t string_literal_base;
+    const uint64_t string_literal_end;
     std::deque<uint8_t> stack;
     Heap heap;
     MMIO mmio;
@@ -138,9 +138,9 @@ class VirtualMemory
 public:
     static constexpr std::size_t MMIO_OBJECT_NUM = MMIO::_num;
 public:
-    explicit VirtualMemory(lib::Array<uint8_t> code, lib::Array<uint8_t> data, uint64_t string_literal_base,
+    explicit VirtualMemory(lib::Array<uint8_t> code, lib::Array<uint8_t> data, uint64_t string_literal_end,
                            ObjectManager& om)
-            : code(std::move(code)), data(std::move(data)), string_literal_base(string_literal_base), mmio(om)
+            : code(std::move(code)), data(std::move(data)), string_literal_end(string_literal_end), mmio(om)
     {
         using namespace layout;
         if (this->code.length() > CODE_BOUNDARY - CODE_BASE) {

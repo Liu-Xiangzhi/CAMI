@@ -36,7 +36,7 @@ public:
     static void launch(std::string_view file_name, FileType file_type = FileType::detect);
 private:
     static std::unique_ptr<tr::MBC> loadFile(std::string_view file_name, bool text_file);
-    static std::unique_ptr<tr::MBC> linkFile(std::unique_ptr<tr::MBC> mbc);
+    static std::unique_ptr<tr::LinkedMBC> linkFile(std::unique_ptr<tr::UnlinkedMBC> mbc);
     static FileType detectFileType(std::string_view file_name);
 };
 

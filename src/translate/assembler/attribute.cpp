@@ -49,8 +49,6 @@ void Assembler::parseAttribute()
             this->mbc->attribute.type = MBC::Type::shared_object;
         } else if (str == "EXECUTABLE") {
             this->mbc->attribute.type = MBC::Type::executable;
-        } else if (str == "FIX_ADDRESS_EXECUTABLE") {
-            this->mbc->attribute.type = MBC::Type::fix_address_executable;
         } else if (str == "ENTRY" || str == "MODULE") {
             if (!Token::isString(token = this->nextToken())) {
                 this->diagnostic(token->begin, "expect string");
@@ -83,7 +81,7 @@ void Assembler::parseComment()
     }
 }
 
-void Assembler::parseLinks(lib::Array<std::string>& result)
+void Assembler::parseLinks(std::vector<std::string>& result)
 {
     auto token = this->nextToken();
     if (token->type != Token::Type::lbracket) {
@@ -92,7 +90,7 @@ void Assembler::parseLinks(lib::Array<std::string>& result)
     }
     std::vector<std::string> files;
     while ((token = this->nextToken())->type != Token::Type::rbracket) {
-        if (token->type == Token::Type::end) [[unlikely]] {
+        if (token->type == Token::Type::section_name || token->type == Token::Type::end) [[unlikely]] {
             this->diagnostic(token->begin, "unclosed bracket");
             return;
         }
@@ -101,10 +99,9 @@ void Assembler::parseLinks(lib::Array<std::string>& result)
             this->skipTo({Token::Type::quote_string, Token::Type::unquote_string, Token::Type::rbracket});
             continue;
         }
-        files.push_back(std::move(down_cast<StringToken&>(token).value));
-        if ((token = this->nextToken())->type != Token::Type::comma) {
-            this->putBack(std::move(token));
+        result.push_back(std::move(down_cast<StringToken&>(token).value));
+        if (this->peek().type == Token::Type::comma) {
+            this->nextToken();
         }
     }
-    result.assign(lib::Array<std::string>::fromVector(std::move(files)));
 }

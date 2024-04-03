@@ -17,12 +17,18 @@
 #include <iostream>
 #include <cstdint>
 #include <random>
+#include <climits>
 
 std::random_device seed;
 std::default_random_engine engine(seed());
 std::uniform_int_distribution<uint64_t> int_dis(0, UINT64_MAX);
 std::uniform_real_distribution<float> flt_dis;
 std::uniform_real_distribution<double> dbl_dis;
+
+bool test_byteSize()
+{
+    return CHAR_BIT == 8;
+}
 
 bool test_floatingTypeSize()
 {
@@ -137,6 +143,10 @@ bool test_conversationBetweenIntegerAndPointer()
 int main()
 {
     bool ok = true;
+    if (!test_byteSize()) {
+        std::cerr << "Not support: one byte is not 8 bits";
+        ok = false;
+    }
     if (!test_floatingTypeSize()) {
         std::cerr << "Not support: condition violation `sizeof(float)==4 && sizeof(double)==8`";
         ok = false;

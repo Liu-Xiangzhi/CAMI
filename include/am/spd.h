@@ -18,6 +18,7 @@
 #define CAMI_AM_SPD_H
 // static program data
 
+#include <utility>
 #include <vector>
 #include <tuple>
 #include <string>
@@ -50,21 +51,22 @@ using u64_opt = lib::Optional<uint64_t, detail::Helper>;
 class SourceCodeLocator
 {
 public:
-    struct Item {
+    struct Item
+    {
         uint64_t addr;
         uint64_t len;
         uint64_t line;
     };
     // modified only by linker
     lib::Array<Item> data;
-
     SourceCodeLocator() = default;
+
     explicit SourceCodeLocator(lib::Array<Item> data) : data(std::move(data)) {}
 
 public:
-    u64_opt getLine(uint64_t addr)
+    u64_opt getSourceLine(uint64_t addr)
     {
-        auto itr = std::upper_bound(data.begin(), data.end(), addr, [](uint64_t a, const Item& b){
+        auto itr = std::upper_bound(data.begin(), data.end(), addr, [](uint64_t a, const Item& b) {
             return a > b.addr;
         });
         if (itr == this->data.begin()) {
@@ -85,8 +87,14 @@ struct AutomaticObjectDescription
     size_t id;
     const ts::Type& type;
     uint64_t offset;
-    u64_opt init_offset;
+    std::unique_ptr<uint8_t[]> init_data;
+
+    AutomaticObjectDescription(std::string name, size_t id, const ts::Type& type, uint64_t offset,
+                               std::unique_ptr<uint8_t[]> init_data) : name(std::move(name)), id(id), type(type),
+                                                                       offset(offset),
+                                                                       init_data(std::move(init_data)) {}
 };
+
 struct StaticObjectDescription
 {
     std::string name;
@@ -114,6 +122,11 @@ struct Function : public Entity
             : Entity(std::move(name), type, address), file_name(std::move(file_name)), frame_size(frame_size),
               code_size(code_size), max_object_num(max_object_num), blocks(std::move(blocks)),
               full_expr_infos(std::move(full_expr_infos)), func_locator(std::move(func_locator)) {}
+
+    u64_opt getSourceLine(uint64_t addr)
+    {
+        return this->func_locator.getSourceLine(addr - this->address);
+    }
 };
 
 struct Global
@@ -122,14 +135,11 @@ struct Global
     lib::Array<ValueBox> constants;
     lib::Array<const ts::Type*> types; // used by cast operator
     lib::Array<Function> functions;
-    lib::Array<uint8_t> stack_init_data;
 
     Global(lib::Array<Object*> static_objects, lib::Array<ValueBox> constants,
-           lib::Array<const ts::Type*> types, lib::Array<Function> functions,
-           lib::Array<uint8_t> stack_init_data)
+           lib::Array<const ts::Type*> types, lib::Array<Function> functions)
             : static_objects(std::move(static_objects)), constants(std::move(constants)),
-              types(std::move(types)), functions(std::move(functions)),
-              stack_init_data(std::move(stack_init_data)) {}
+              types(std::move(types)), functions(std::move(functions)) {}
 
     Global(Global&&) noexcept = default;
     Global& operator=(Global&&) noexcept = delete;
@@ -151,19 +161,6 @@ public:
         return &*itr;
     }
 };
-
-struct InitializeDescription
-{
-    lib::Array<uint8_t> code;
-    lib::Array<uint8_t> data;
-    uint64_t string_literal_base;
-    lib::Array<StaticObjectDescription> static_objects;
-    lib::Array<ValueBox> constants;
-    lib::Array<const ts::Type*> types;
-    lib::Array<Function> functions;
-    lib::Array<uint8_t> stack_init_data;
-};
-
 } // namespace cami::am::spd
 
 #endif //CAMI_AM_SPD_H

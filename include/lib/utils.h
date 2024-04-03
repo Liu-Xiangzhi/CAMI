@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <lib/assert.h>
+#include <cstring>
 #ifdef _MSC_VER
 #include <intrin.h>
 #endif
@@ -91,6 +92,45 @@ constexpr size_t roundUpNthRoot(size_t val, size_t n)
         ++left;
     }
     return left;
+}
+
+template<int byte_cnt>
+void inline write(uint8_t* target, uint64_t val)
+{
+    if constexpr (byte_cnt > 8 || byte_cnt <= 0) {
+        static_assert(!std::is_same_v<int, decltype(byte_cnt)>, "`byte_cnt` should in range [1, 7]");
+    }
+#ifdef CAMI_TARGET_INFO_LITTLE_ENDIAN
+    std::memcpy(target, &val, byte_cnt);
+#else
+    for (int i = 0; i < byte_cnt; ++i) {
+        target[i] = (val >> (8 * i)) & 0xff;
+    }
+#endif
+}
+
+template<int byte_cnt>
+inline uint64_t readU(const uint8_t* source)
+{
+    if constexpr (byte_cnt > 8 || byte_cnt <= 0) {
+        static_assert(!std::is_same_v<int, decltype(byte_cnt)>, "`byte_cnt` should in range [1, 8]");
+    }
+#ifdef CAMI_TARGET_INFO_LITTLE_ENDIAN
+    uint64_t val = 0;
+    std::memcpy(&val, source, byte_cnt);
+#else
+    for (int i = 0; i < byte_cnt; ++i) {
+        val = (val << 8) | source[i];
+    }
+#endif
+    return val;
+}
+
+template<int byte_cnt>
+inline uint64_t readI(const uint8_t* source)
+{
+    auto val = static_cast<int64_t>(readU<byte_cnt>(source));
+    return (val << (64 - byte_cnt * 8)) >> (64 - byte_cnt * 8);
 }
 
 inline namespace literals {

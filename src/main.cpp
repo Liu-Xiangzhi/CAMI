@@ -48,8 +48,9 @@ int cami_main(int argc, char* argv[])
     } else if (command == "test_translate"sv) {
         using namespace tr;
         std::string output_name = std::string{"deasm_"}.append(file_name);
-        auto mbc = file_name | read_file | assemble;
-        Linker::link({mbc.get()}, {MBC::Type::fix_address_executable}) | deassemble | output_name;
+        std::vector<std::unique_ptr<UnlinkedMBC>> mbcs;
+        mbcs.push_back(file_name | read_file | assemble);
+        Linker::link(std::move(mbcs), {MBC::Type::executable}) | deassemble | output_name;
     } else {
         log::unbuffered.eprintln("Unknown command '${}'", command);
         return 1;

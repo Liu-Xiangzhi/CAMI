@@ -33,11 +33,6 @@ struct AssemblerTag
 struct DeAssemblerTag
 {
 };
-struct TBC
-{
-    std::string text;
-    std::string_view name;
-};
 struct MBCToBeDeAsm
 {
     const MBC& mbc;
@@ -48,7 +43,7 @@ constexpr detail::ReaderTag read_file;
 constexpr detail::AssemblerTag assemble;
 constexpr detail::DeAssemblerTag deassemble;
 
-inline detail::TBC operator|(std::string_view file_name, detail::ReaderTag)
+inline TBC operator|(std::string_view file_name, detail::ReaderTag)
 {
     std::ifstream input{file_name.data()};
     if (!input.is_open()) {
@@ -58,13 +53,13 @@ inline detail::TBC operator|(std::string_view file_name, detail::ReaderTag)
     return {std::move(text), file_name};
 }
 
-inline detail::TBC operator|(std::istream& is, detail::ReaderTag)
+inline TBC operator|(std::istream& is, detail::ReaderTag)
 {
     std::string text{std::istreambuf_iterator<char>{is}, std::istreambuf_iterator<char>{}};
     return {std::move(text), "-"};
 }
 
-inline std::unique_ptr<MBC> operator|(const detail::TBC& input, detail::AssemblerTag)
+inline std::unique_ptr<UnlinkedMBC> operator|(const TBC& input, detail::AssemblerTag)
 {
     return Assembler{}.assemble(input.text, input.name);
 }

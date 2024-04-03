@@ -20,6 +20,7 @@
 #include <iostream>
 #include "bytecode.h"
 #include <am/fetch_decode.h>
+#include <lib/slice.h>
 
 namespace cami::tr {
 
@@ -29,22 +30,32 @@ class DeAssembler
 public:
     static void deassemble(const MBC& mbc, std::ostream& output);
 private:
-    static void dasAttribute(const MBC::Attribute& attribute, std::ostream& output);
-    static void dasComment(std::string_view comment, std::ostream& output);
-    static void dasTypes(const lib::Array<const ts::Type*>& types, std::ostream& output);
-    static void dasCode(std::string_view section_name, const MBC& mbc, const MBC::Code& code, std::ostream& output);
-    static void dasConstant(std::pair<const ts::Type*, uint64_t> constant, std::ostream& output);
-    static void dasLinkedFileInstr(am::Opcode op, uint64_t info, const MBC& mbc, std::ostream& output);
-    static std::set<uint64_t> getLabelOffsets(const MBC::Code& code);
-    static void dasBSS(const MBC::BSS& bss, std::ostream& output);
-    static void dasData(std::string_view section_name, const MBC::Data& data, std::ostream& output,
-                        bool to_string = false);
-    static void dasObject(std::string_view section_name, const lib::Array<am::spd::StaticObjectDescription>& objects,
-                          std::ostream& output);
-    static void dasFunction(const lib::Array<am::spd::Function>& functions, std::ostream& output);
-    static void dasBlock(const am::spd::Block& block, std::ostream& output);
-    static void dasFullExpression(const am::FullExprInfo& full_expr, std::ostream& output);
-    static void dasSourceLocation(const am::spd::SourceCodeLocator& locator, std::ostream& output);
+    static void attribute(const MBC::Attribute& attribute, std::ostream& output);
+    static void comment(std::string_view comment, std::ostream& output);
+    static void types(lib::Slice<const ts::Type* const> types, std::ostream& output);
+    static void sourceCoderLocator(lib::Slice<const am::spd::SourceCodeLocator::Item> locator, std::ostream& output);
+    static void accessSourceLocation(lib::Slice<const std::pair<uint64_t, uint64_t>> location, std::ostream& output);
+    static void sequenceAfterGraph(uint64_t trace_event_cnt, lib::Slice<const uint8_t> graph, std::ostream& output);
+
+    struct Unlinked
+    {
+        static void object(lib::Slice<const std::unique_ptr<UnlinkedMBC::StaticObject>> objects, std::ostream& output); // NOLINT
+        static void function(lib::Slice<const std::unique_ptr<UnlinkedMBC::Function>> functions, std::ostream& output);
+        static void code(lib::Slice<const uint8_t> code, lib::Slice<const UnlinkedMBC::RelocateEntry> relocate, std::ostream& output);
+        static void block(const UnlinkedMBC::Block& block, std::ostream& output);
+        static void fullExpression(const UnlinkedMBC::FullExprInfo& full_expr, std::ostream& output);
+    };
+
+    struct Linked
+    {
+        static void object(const LinkedMBC& linked_mbc, std::ostream& output);
+        static void function(const LinkedMBC& linked_mbc, std::ostream& output);
+        static void code(const LinkedMBC& linked_mbc, uint64_t addr, uint64_t len, std::ostream& output);
+        static void instruction(am::Opcode op, uint64_t info, const LinkedMBC& linked_mbc, std::ostream& output);
+        static void constant(const ValueBox& constant, std::ostream& output);
+        static void block(const am::spd::Block& block, std::ostream& output);
+        static void fullExpression(const am::FullExprInfo& full_expr, std::ostream& output);
+    };
 };
 
 } // namespace cami::tr

@@ -138,6 +138,8 @@ void Execute::zero(AbstractMachine& am, InstrInfo info)
 void Execute::writeInit(AbstractMachine& am)
 {
     Execute::modifyCheck(am, true);
+    COMPILER_GUARANTEE(down_cast<Object*>(am.dsg_reg.entity)->status == Object::Status::uninitialized,
+                       lib::format("object `${}` is double initialized", down_cast<Object&>(*am.dsg_reg.entity).name));
     Execute::do_modify(am, am.operand_stack.popDeterminateValue());
     updateCommonInitialSequenceStatus(down_cast<Object&>(*am.dsg_reg.entity));
 }
@@ -146,6 +148,7 @@ void Execute::zeroInit(AbstractMachine& am)
 {
     Execute::basicModifyCheck(am, true);
     auto& obj = down_cast<Object&>(*am.dsg_reg.entity);
+    COMPILER_GUARANTEE(obj.status == Object::Status::uninitialized, lib::format("object `${}` is double initialized", obj.name));
     am.memory.zeroize(obj.address, obj.effective_type.size());
     if (auto ref = am.object_manager.getReferencedObject(&obj); ref) {
         [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
@@ -268,16 +271,9 @@ void Execute::do_enterBlock(AbstractMachine& am, uint32_t block_id)
     for (const auto& item: static_info->blocks[block_id].obj_desc) {
         CHECK_ID(object, item.id, current_func.automatic_objects.length());
         auto obj = am.object_manager.new_(item.name, item.type, am.state.frame_pointer + item.offset);
-        if (item.init_offset) {
+        if (item.init_data) {
             obj->status = Object::Status::well;
-            auto start = *item.init_offset;
-            auto end = start + item.type.size();
-            auto boundary = am.static_info.stack_init_data.length();
-            COMPILER_GUARANTEE(start < boundary && end <= boundary, lib::format(
-                    "range([${}, ${})) of initialize data of object `${name}` is out of boundary(${})",
-                    start, end, *obj, boundary));
-            am.memory.write(am.state.frame_pointer + item.offset,
-                            &am.static_info.stack_init_data[*item.init_offset], item.type.size());
+            am.memory.write(am.state.frame_pointer + item.offset, item.init_data.get(), item.type.size());
         }
         current_func.automatic_objects[item.id] = obj;
     }
@@ -398,7 +394,7 @@ void Execute::call(AbstractMachine& am, InstrInfo info)
     auto context = new TraceContext{
             cur_func.context,
             TraceLocation{cur_func.full_expr_exec_cnt, cur_func.cur_full_expr_id,
-                          // it doesn't matter whether call point inner id is coexisting or not
+                    // it doesn't matter whether call point inner id is coexisting or not
                           InnerID::newCoexisting(info.getInnerID())},
             static_cast<uint32_t>(&func - am.static_info.functions.data())
     };

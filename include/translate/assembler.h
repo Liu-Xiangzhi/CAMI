@@ -27,13 +27,15 @@
 #include <foundation/type/def.h>
 #include <foundation/logger.h>
 #include <lib/optional.h>
+#include <lib/slice.h>
 #include "bytecode.h"
 
 // TBC ==> MBC
 namespace cami::tr {
+namespace detail {
 template<typename T>
 struct ParseFunctionTrait;
-namespace detail {
+
 struct ConstantHelper
 {
     static std::pair<const ts::Type*, uint64_t> makeNull() noexcept
@@ -189,123 +191,57 @@ private:
 class Assembler
 {
     Lexer lexer{"", ""};
-    MBC* mbc = nullptr;
+    UnlinkedMBC* mbc = nullptr;
     std::deque<std::unique_ptr<Token>> token_buffer;
     bool has_error = false;
     std::set<const ts::Type*> parsed_types;
-    std::set<std::pair<const ts::Type*,uint64_t>> parsed_constants;
+    std::set<std::pair<const ts::Type*, uint64_t>> parsed_constants;
 public:
     // entry
-    std::unique_ptr<MBC> assemble(std::string_view tbc, std::string_view name);
+    std::unique_ptr<UnlinkedMBC> assemble(std::string_view tbc, std::string_view name);
 private:
     // entry
     void parseSection();
     // attribute
     void parseAttribute();
     void parseComment();
-    void parseLinks(lib::Array<std::string>& result);
+    void parseLinks(std::vector<std::string>& result);
     // code
     void parseTypes();
     void parseTypeDefine(bool is_struct, std::string struct_or_union_name);
-    lib::Optional<const ts::Type*> parseTypeSpecifier();
-    lib::Optional<const ts::Type*> do_parseTypeSpecifier();
-    lib::Optional<const ts::Type*> parseTypeArray(const ts::Type* base_type);
-    lib::Optional<const ts::Type*> parseTypeFunction();
-    lib::Optional<const ts::Type*> parseTypeFunction(const std::vector<const ts::Type*>& params);
-    std::pair<lib::Optional<const ts::Type*>, bool> parseTypeBasicOrQualifier(
-            const ts::Type* base_type, std::unique_ptr<Token> token);
-    void parseCodeCommon(MBC::Code& code);
-    constant_opt_t parseConstant();
+    auto parseTypeSpecifier() -> lib::Optional<const ts::Type*>;
+    auto do_parseTypeSpecifier() -> lib::Optional<const ts::Type*>;
+    auto parseTypeArray(const ts::Type* base_type) -> lib::Optional<const ts::Type*>;
+    auto parseTypeFunction() -> lib::Optional<const ts::Type*>;
+    auto parseTypeFunction(const std::vector<const ts::Type*>& params) -> lib::Optional<const ts::Type*>;
+    auto parseTypeBaseOrQualify(const ts::Type* base_type, std::unique_ptr<Token> token) -> std::pair<lib::Optional<const ts::Type*>, bool>;
+    auto parseCode() -> std::pair<std::vector<uint8_t>, std::vector<UnlinkedMBC::RelocateEntry>>;
+    auto parseConstant() -> constant_opt_t;
     void parseInstr(std::vector<uint8_t>& code_bin,
-                    std::vector<std::pair<uint64_t, std::string>>& relocate,
+                    std::vector<UnlinkedMBC::RelocateEntry>& relocate,
                     std::vector<std::tuple<uint64_t, std::string, uint64_t>>& relocate_label);
-    // data
-    void parseBSS();
-    void parseDataCommon(MBC::Data& data);
-    void parseBin(lib::Array<uint8_t>& result);
-    // entity
+    // entity(object & function)
+    void parseObjects();
+    void parseFunctions();
+    auto parseStaticObject() -> std::unique_ptr<UnlinkedMBC::StaticObject>;
+    auto parseBin() -> std::vector<uint8_t>;
+    auto parseFunction() -> std::unique_ptr<UnlinkedMBC::Function>;
+    auto parseBlocks() -> std::vector<UnlinkedMBC::Block>;
+    auto parseFullExprInfos() -> std::vector<UnlinkedMBC::FullExprInfo>;
+    auto parseFullExprInfo() -> UnlinkedMBC::FullExprInfo;
+    auto parseBlock() -> UnlinkedMBC::Block;
+    auto parseAutoObject() -> UnlinkedMBC::AutomaticObject;
+    auto parseFullExprSourceLocation(uint64_t trace_event_cnt) -> std::vector<std::pair<uint64_t, uint64_t>>;
+    auto parseFullExprSourceLocationPair() -> std::pair<uint64_t, uint64_t>;
+    auto parseFullExprSequenceAfterGraph(uint64_t trace_event_cnt) -> std::vector<uint8_t>;
+    auto parseIntegerList(uint64_t max_value) -> std::vector<uint64_t>;
+    auto parseDebugLocInfos() -> std::vector<am::spd::SourceCodeLocator::Item>;
+    auto parseDebugLocInfo() -> am::spd::SourceCodeLocator::Item;
     template<typename T>
-    lib::Array<T> parseLists();
-    void parseObjectsCommon(lib::Array<am::spd::StaticObjectDescription>& objects);
-    am::spd::StaticObjectDescription parseStaticObject();
-    void parseFunctionsCommon(lib::Array<am::spd::Function>& functions);
-    am::spd::Function parseFunction();
-    lib::Array<am::spd::Block> parseBlocks();
-    lib::Array<am::FullExprInfo> parseFullExprInfos();
-    am::FullExprInfo parseFullExprInfo();
-    am::spd::Block parseBlock();
-    am::spd::AutomaticObjectDescription parseAutoObject();
-    lib::Array<std::pair<uint64_t, uint64_t>> parseFullExprSourceLocation();
-    std::pair<uint64_t, uint64_t> parseFullExprSourceLocationPair();
-    lib::Array<uint8_t> parseFullExprSequenceAfterGraph(uint64_t trace_event_cnt);
-    std::vector<uint64_t> parseIntegerList(uint64_t max_value);
-    am::spd::SourceCodeLocator parseDebugLocInfos();
-    am::spd::SourceCodeLocator::Item parseDebugLocInfo();
-    void parseKeyValuePair(std::string_view key, std::string& value);
-    void parseKeyValuePair(std::string_view key, uint64_t& value);
-    void parseKeyValuePair(std::string_view key, const ts::Type*& value);
+    std::vector<T> parseLists();
+    template<typename T, typename P = T>
+    P parseKV(std::string_view key);
     bool parseKeyValueCommonCheck(std::string_view key);
-
-    void parseData()
-    {
-        this->parseDataCommon(this->mbc->data);
-    }
-
-    void parseStringLiteralData()
-    {
-        this->parseDataCommon(this->mbc->string_literal);
-    }
-
-    void parseThreadLocalData()
-    {
-        this->parseDataCommon(this->mbc->thread_local_);
-    }
-
-    void parseStackInitData()
-    {
-        this->parseDataCommon(this->mbc->stack_init);
-    }
-
-    void parseCode()
-    {
-        this->parseCodeCommon(this->mbc->code);
-    };
-
-    void parseInitCode()
-    {
-        this->parseCodeCommon(this->mbc->init_code);
-    };
-
-    void parseThreadLocalInitCode()
-    {
-        this->parseCodeCommon(this->mbc->thread_local_init_code);
-    };
-
-    void parseObjects()
-    {
-        this->parseObjectsCommon(this->mbc->data.objects);
-    }
-
-    void parseBSSObjects()
-    {
-        this->parseObjectsCommon(this->mbc->bss.objects);
-    }
-
-    void parseStringLiteralObjects()
-    {
-        this->parseObjectsCommon(this->mbc->string_literal.objects);
-    }
-
-    void parseThreadLocalObjects()
-    {
-        this->parseObjectsCommon(this->mbc->thread_local_.objects);
-    }
-
-    void parseFunctions()
-    {
-        this->parseFunctionsCommon(this->mbc->code.functions);
-    }
-
 private:
     // helper functions
     void reset(std::string_view tbc, std::string_view name)
@@ -325,6 +261,15 @@ private:
             return token;
         }
         return this->lexer.nextToken();
+    }
+
+    Token& peek()
+    {
+        if (this->token_buffer.empty()) {
+            auto token = this->lexer.nextToken();
+            this->putBack(std::move(token));
+        }
+        return *this->token_buffer.back();
     }
 
     void putBack(std::unique_ptr<Token> token)
@@ -353,9 +298,7 @@ private:
 
     // helper struct for `parseLists`
     template<typename T>
-    friend
-    struct ParseFunctionTrait;
-
+    friend struct detail::ParseFunctionTrait;
 };
 
 } // namespace cami::tr

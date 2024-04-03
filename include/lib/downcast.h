@@ -48,8 +48,6 @@ struct IsSmartPointer<std::weak_ptr<T>>
 };
 template<typename T>
 constexpr bool is_smart_ptr_v = IsSmartPointer<T>::value;
-
-
 template<typename T, typename P, typename = void>
 struct DownCast
 {
@@ -73,8 +71,7 @@ struct DownCast<T, P, std::enable_if_t<std::is_pointer_v<T> && std::is_pointer_v
 
 template<typename T, typename P>
 struct DownCast<T, P, std::enable_if_t<
-        std::is_reference_v<T> && std::is_reference_v<P> &&
-        !is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<P>>>>>
+        std::is_reference_v<T> && !is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<P>>>>>
 {
     static T f(P expr)
     {
@@ -119,13 +116,31 @@ struct DownCast<T, P, std::enable_if_t<
 #endif
     }
 };
+
+template<typename T, typename P>
+struct DownCast<T, P, std::enable_if_t<
+        is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<T>>> && is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<P>>>
+        && std::is_rvalue_reference_v<P>>>
+{
+    static T f(P expr)
+    {
+#ifdef NDEBUG
+        auto res = static_cast<typename T::element_type*>(expr.release());
+        return std::unique_ptr<typename T::element_type>{res};
+#else
+        auto res = dynamic_cast<typename T::element_type*>(expr.release());
+        ASSERT(res != nullptr, "dynamic cast failed");
+        return std::unique_ptr<typename T::element_type>{res};
+#endif
+    }
+};
 } // namespace detail
 
 namespace cami {
 template<typename T, typename P>
 T down_cast(P&& p)
 {
-    return ::cami::detail::DownCast<T, P&&>::f(p);
+    return ::cami::detail::DownCast<T, P&&>::f(std::forward<P>(p));
 }
 
 } // namespace cami

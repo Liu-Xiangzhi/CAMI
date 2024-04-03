@@ -14,22 +14,16 @@
  * If not, see <https://www.gnu.org/licenses/>.
  ******************************************************************************/
 
-#ifndef CAMI_LIB_ARRAY_H
-#define CAMI_LIB_ARRAY_H
+#ifndef CAMI_LIB_SLICE_H
+#define CAMI_LIB_SLICE_H
 
 #include <cstddef>
-#include <lib/assert.h>
-#include <lib/slice.h>
-#include <string>
 #include <iterator>
-#include <vector>
-#include <set>
-#include <cstring>
 
 namespace cami::lib {
 
 template<typename T>
-class Array
+class Slice
 {
     T* ptr;
     size_t size_;
@@ -62,6 +56,11 @@ public:
 
         difference_type operator-(Iterator that) const noexcept
         {
+            if (this->ptr == nullptr) {
+                ASSERT(that.ptr == nullptr, "operate empty array");
+                return 0;
+            }
+            ASSERT(that.ptr != nullptr, "operate empty array");
             return this->ptr - that.ptr;
         }
 
@@ -137,85 +136,20 @@ public:
     };
 
 public:
-    using value_type = T;
     using iterator = Iterator<T>;
     using const_iterator = Iterator<const T>;
 
-    Array() : ptr(nullptr), size_(0) {}
+    Slice() : ptr(nullptr), size_(0) {}
 
-    explicit Array(size_t size) : ptr(alloc(size)), size_(size) {}
+    Slice(T* ptr, size_t size) : ptr(ptr), size_(size) {}
 
-    Array(std::initializer_list<T> list) : ptr(alloc(list.size())), size_(list.size())
-    {
-        auto itr = list.begin();
-        for (size_t i = 0; i < this->size_; ++i, ++itr) {
-            new(&this->ptr[i]) T{std::move(*itr)};
-        }
-    }
+    template<template<typename> typename P>
+    Slice(P<T>& container): ptr(container.data()), size_(container.size()) {} // NOLINT
 
-    Array(const Array& that) : ptr(alloc(that.size_)), size_(that.size_)
-    {
-        for (size_t i = 0; i < this->size_; ++i) {
-            new(&this->ptr[i]) T{that.ptr[i]};
-        }
-    }
-
-    Array(Array&& that) noexcept : ptr(that.ptr), size_(that.size_)
-    {
-        that.ptr = nullptr;
-        that.size_ = 0;
-    }
-
-    Array& operator=(const Array&) = delete;
-    Array& operator=(Array&&) noexcept = delete;
-
-    ~Array()
-    {
-        if (this->ptr == nullptr) {
-            return;
-        }
-        for (size_t i = 0; i < this->size_; ++i) {
-            this->ptr[i].~T();
-        }
-        free(this->ptr);
-        this->ptr = nullptr;
-    }
-
-    static T* alloc(size_t size)
-    {
-        return size > 0 ? reinterpret_cast<T*>(malloc(sizeof(T) * size)) : nullptr;
-    }
+    template<template<typename> typename P>
+    Slice(const P<std::remove_const_t<T>>& container): ptr(container.data()), size_(container.size()) {} // NOLINT
 
 public:
-    void assign(const Array<T>& that)
-    {
-        if (this == &that) [[unlikely]] {
-            return;
-        }
-        this->~Array();
-        new(this) Array{that};
-    }
-
-    void assign(Array<T>&& that)
-    {
-        if (this == &that) [[unlikely]] {
-            return;
-        }
-        this->~Array();
-        new(this) Array{std::move(that)};
-    }
-
-    void clear()
-    {
-        this->~Array();
-        new(this) Array(0);
-    }
-
-    template<typename ...ARGS>
-    void init(size_t idx, ARGS&& ... args)
-    {
-        new(&this->operator[](idx)) T{std::forward<ARGS>(args)...};
-    }
 
     [[nodiscard]] size_t length() const noexcept
     {
@@ -258,16 +192,6 @@ public:
         return this->ptr[idx];
     }
 
-    const T& front() const noexcept
-    {
-        return this->operator[](0);
-    }
-
-    T& front() noexcept
-    {
-        return this->operator[](0);
-    }
-
     const T& back() const noexcept
     {
         return this->operator[](this->size_ - 1);
@@ -297,55 +221,20 @@ public:
     {
         return const_iterator{this->ptr + this->size_};
     }
-
-    static Array fromVector(const std::vector<T>& vec)
-    {
-        Array<T> result(vec.size());
-        // just trust your compiler could be able to optimize this for loop into `memcpy`
-        //   or SIMD instructions for trivial_copy_constructable instance :)
-        for (size_t i = 0; i < vec.size(); ++i) {
-            result.init(i, vec[i]);
-        }
-        return result;
-    }
-
-    static Array fromVector(std::vector<T>&& vec)
-    {
-        Array<T> result(vec.size());
-        for (size_t i = 0; i < vec.size(); ++i) {
-            result.init(i, std::move(vec[i]));
-        }
-        return result;
-    }
-
-    static Array fromSet(const std::set<T>& set)
-    {
-        Array<T> result(set.size());
-        size_t cnt = 0;
-        for (const auto& item: set) {
-            result.init(cnt++, item);
-        }
-        return result;
-    }
 };
 
 template<typename T>
-inline typename Array<T>::iterator
-operator+(typename Array<T>::iterator::difference_type n, typename Array<T>::iterator itr)
+inline typename Slice<T>::iterator
+operator+(typename Slice<T>::iterator::difference_type n, typename Slice<T>::iterator itr)
 {
     return itr + n;
 }
 
 template<typename T>
-inline typename Array<T>::const_iterator
-operator+(typename Array<T>::iterator::difference_type n, typename Array<T>::const_iterator itr)
+inline typename Slice<T>::const_iterator
+operator+(typename Slice<T>::iterator::difference_type n, typename Slice<T>::const_iterator itr)
 {
     return itr + n;
 }
-
-template<typename T>
-Array(std::initializer_list<T>) -> Array<T>;
-
 } // namespace cami::lib
-
-#endif //CAMI_LIB_ARRAY_H
+#endif //CAMI_LIB_SLICE_H

@@ -100,7 +100,7 @@ void VirtualMemory::zeroize(uint64_t addr, uint64_t len)
         throw MemoryAccessException{addr, len, "too large length"};
     }
     if (this->inValidDataSegment(addr, len)) {
-        if (addr >= this->string_literal_base || addr + len > this->string_literal_base) {
+        if (addr + len > this->string_literal_end) {
             throw UBException{{UB::modify_string_literal},
                               lib::format("zeroize string literal segment, address = ${X}, length = ${X}", addr, len)};
         }
@@ -177,7 +177,7 @@ void VirtualMemory::readMMIO(uint8_t* dest, uint64_t addr, uint64_t len) const
 
 void VirtualMemory::writeData(uint64_t addr, const uint8_t* src, uint64_t len)
 {
-    if (addr >= this->string_literal_base || addr + len > this->string_literal_base) {
+    if (addr + len > this->string_literal_end) {
         throw UBException{{UB::modify_string_literal},
                           lib::format("write string literal segment, address = ${X}, length = ${X}", addr, len)};
     }

@@ -26,6 +26,7 @@
 #include "heap_allocator.h"
 #include "object.h"
 #include <lib/format.h>
+#include <translate/bytecode.h>
 #include <memory>
 
 namespace cami::am {
@@ -59,13 +60,17 @@ class AbstractMachine
 
     friend class Formatter;
 
-public:
-    explicit AbstractMachine(spd::InitializeDescription&& desc)
-            : state({&desc.functions.back(), 0, 0, TraceContext::dummy}),
-              object_manager(*this, AbstractMachine::countPermanentObject(desc)),
-              memory(std::move(desc.code), std::move(desc.data), desc.string_literal_base, this->object_manager),
+private:
+    explicit AbstractMachine(tr::LinkedMBC& bytecode)
+            : state({bytecode.attribute.entry, 0, 0, TraceContext::dummy}),
+              object_manager(*this, AbstractMachine::countPermanentObject(bytecode)),
+              memory(std::move(bytecode.code), std::move(bytecode.data), bytecode.string_literal_len, this->object_manager),
               heap_allocator(new ::CAMI_MEMORY_HEAP_ALLOCATOR{this->memory}),
-              static_info(std::move(this->initStaticInfo(desc))) {}
+              static_info(std::move(this->initStaticInfo(bytecode))) {}
+
+public:
+    explicit AbstractMachine(std::unique_ptr<tr::LinkedMBC> bytecode)
+            : AbstractMachine(AbstractMachine::preprocessBytecode(*bytecode)) {}
 
 public:
     enum class ExitCode
@@ -75,8 +80,10 @@ public:
     ExitCode run();
     void execute();
 private:
-    spd::Global initStaticInfo(spd::InitializeDescription& desc);
-    static uint64_t countPermanentObject(spd::InitializeDescription& desc);
+    static void checkMetadataCnt(tr::LinkedMBC& bytecode);
+    static tr::LinkedMBC& preprocessBytecode(tr::LinkedMBC& bytecode);
+    spd::Global initStaticInfo(tr::LinkedMBC& bytecode);
+    static uint64_t countPermanentObject(tr::LinkedMBC& bytecode);
 };
 
 } // namespace cami::am

@@ -35,7 +35,7 @@ namespace cami::am::state {
 
 struct Function
 {
-    spd::Function* static_info;
+    const spd::Function* static_info;
     uint64_t return_address;
     lib::Array<Object*> automatic_objects;
     std::stack<uint64_t> blocks{};
@@ -43,7 +43,7 @@ struct Function
     uint32_t cur_full_expr_id = 0;
     uint64_t full_expr_exec_cnt = 0;
 
-    Function(spd::Function* static_info, uint64_t return_address, size_t max_object_num, TraceContext& context)
+    Function(const spd::Function* static_info, uint64_t return_address, size_t max_object_num, TraceContext& context)
             : static_info(static_info), return_address(return_address), automatic_objects(max_object_num),
               context(context)
     {
