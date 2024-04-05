@@ -1,12 +1,117 @@
 {
     "tools" : {
-        "cami" : {
+        "CAMI" : {
             "description" : "C Abstract Machine Interpreter",
             "commands" : [
-                "${eva_root}/bin/ccc.sh ${input}"
+                {
+                    "command": "${eval_root}/bin/cami.sh ${input} ${test_suite_dir} ${out_dir}",
+                    "interrupt_on_error": false
+                }
             ],
-            "detect_function" : "Undefined Behavior detected"
+            "detect_word" : "Undefined Behavior detected"
+        },
+        "GCC" : {
+            "description" : "GCC with UBSan, ASan",
+            "commands" : [
+                {
+                    "command": "gcc ${input} -O0 -fsanitize=undefined -fsanitize=address -o ${local_out_dir}/out.elf",
+                    "interrupt_on_error": true
+                },
+                {
+                    "command": "${local_out_dir}/out.elf",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "warn|Warn|error|Error|ERROR"
+        },
+        "Clang" : {
+            "description" : "Clang with UBSan",
+            "commands" : [
+                {
+                    "command": "clang-12 ${input} -O0 -fsanitize=undefined -fsanitize-trap=undefined -o ${local_out_dir}/out.elf",
+                    "interrupt_on_error": true
+                },
+                {
+                    "command": "${local_out_dir}/out.elf",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "warn|Warn|error|Error|ERROR"
+        },
+        "cppcheck" : {
+            "description" : "cppcheck",
+            "commands" : [
+                {
+                    "command": "cppcheck --enable=all --suppress=missingIncludeSystem ${input}",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "error|warning|portablity"
+        },
+        "scan-build" : {
+            "description" : "clang tools",
+            "commands" : [
+                {
+                    "command": "scan-build -o ${local_out_dir} clang ${input}",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "[1-9]\\d* bug"
+        },
+        "Frama-C" : {
+            "description" : "Frama-C Value Analysis",
+            "commands" : [
+                {
+                    "command": "frama-c -eva ${input}",
+                    "interrupt_on_error": false
+                }
+
+            ],
+            "detect_word" : "[1-9]\\d* error|[1-9]\\d* warning"
+        },
+        "Valgrind" : {
+            "description" : "Valgrind",
+            "commands" : [
+                {
+                    "command": "gcc -O0 -g ${input} -o ${local_out_dir}/out.elf",
+                    "interrupt_on_error": true
+                },
+                {
+                    "command": "valgrind --tool=memcheck --trace-children=yes ${local_out_dir}/out.elf",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "[1-9]\\d* error"
+        },
+        "kcc" : {
+            "description" : "kcc",
+            "commands" : [
+                {
+                    "command": "kcc ${input} -o ${local_out_dir}/out.elf",
+                    "interrupt_on_error": true
+                },
+                {
+                    "command": "${local_out_dir}/out.elf",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "error|Error|ERROR|Undefined behavior"
+        },
+        "Compcert C Interpreter" : {
+            "description" : "Compcert C Interpreter",
+            "commands" : [
+                {
+                    "command": "ccomp -interp ${input}",
+                    "interrupt_on_error": false
+                }
+            ],
+            "detect_word" : "error|Error|ERROR|Undefined behavior"
         }
     },
-    "filter": []
+    "filter": [
+        {
+            "tool" : "CAMI",
+            "rule" : []
+        }
+    ]
 }
