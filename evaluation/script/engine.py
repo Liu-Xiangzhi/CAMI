@@ -5,12 +5,15 @@ import result
 import os
 import sys
 from dataclasses import dataclass
+import asyncio
+from eregex import ERegex
 
 def filte(filters: list[Filter], tool: str, test_case:str):
     for flt in filters:
-        if not re.search(flt.tool, tool):
+        tool_matcher = ERegex(flt.tool)
+        if not tool_matcher.match(tool):
             continue
-        return any(map(lambda r: re.search(r, test_case), flt.rule))
+        return any(map(lambda r: ERegex(r).match(test_case), flt.rule))
     return True
 
 @dataclass
@@ -21,23 +24,22 @@ class Executor:
     test_suite_dir: str
     out_dir: str
 
-    def execute(self, test_case: str) -> result.Case|None:
-        import subprocess
+    async def execute(self, test_case: str) -> tuple[str, result.Case]|None:
         self.current_test_case = test_case
         output: list[tuple[str, str, str]] = []
         is_alarmed = False
         for cmd in self.tool_info.commands:
             cmd_list = self._parse_cmd(cmd.command)
-            p = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+            p = await asyncio.create_subprocess_exec(*cmd_list, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            stdout, stderr = map(lambda x: x.decode('utf-8'), await p.communicate())
             if p.returncode != 0 and cmd.interrupt_on_error:
-                print(f'\n\033[31mtool "{self.tool_name}" execute aborted\033[0m, due to failed command: {" ".join(cmd_list)}\noutput: {p.stdout}\n {p.stderr}' ,file=sys.stderr)
+                print(f'\n\033[31mtool "{self.tool_name}" execute aborted\033[0m, due to failed command: {" ".join(cmd_list)}\noutput: {stdout}\n {stderr}' ,file=sys.stderr)
                 return None
-            output.append((' '.join(cmd_list), str(p.stdout), str(p.stderr)))
-            is_alarmed = is_alarmed or \
-                     re.search(self.tool_info.detect_word, str(p.stdout)) is not None or \
-                     re.search(self.tool_info.detect_word, str(p.stderr)) is not None
+            output.append((' '.join(cmd_list), stdout, stderr))
+            word_matcher = ERegex(self.tool_info.detect_word)
+            is_alarmed = is_alarmed or word_matcher.match(stdout) or word_matcher.match(stderr)
         
-        return result.Case(name= test_case, output=output, alarmed=is_alarmed)
+        return (self.tool_name, result.Case(name= test_case, output=output, alarmed=is_alarmed))
 
     def _parse_cmd(self, cmd:str) -> list[str]:
         import shlex
@@ -55,6 +57,12 @@ class Executor:
                 return self.current_test_case
             case 'local_out_dir':
                 return os.path.join(self.out_dir, re.sub(r'\s', '_',self.tool_name))
+            case 'unique':
+                import time
+                return str(time.time()).replace('.', '_')
+            case 'output':
+                input_name, _ = os.path.splitext(self.current_test_case)
+                return input_name.replace(os.sep, '-') + '.out'
             case _:
                 raise ValueError(f'Unknown command variable "{var}"')
 
@@ -65,24 +73,30 @@ class Engine:
     def run(self, eval_root: str, test_suite_dir: str, out_dir: str) -> dict[str, result.Tool]:
         import os
         import glob
-        self.tool_test_cases_num = len(glob.glob(os.path.join(test_suite_dir, '**/*.c'))) * len(self.config.tools)
+        self.tool_test_cases_num = len(glob.glob(os.path.join(test_suite_dir, '**/*.c'), recursive=True )) * len(self.config.tools)
         self.processed_case_cnt = 0
         self.eval_root = eval_root
         self.test_suite_dir = test_suite_dir
         self.out_dir = out_dir
         self.eval_result: dict[str, result.Tool] = {}
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
         for tool_name in self.config.tools.keys():
             out_path = os.path.join(out_dir, re.sub(r'\s', '_', tool_name))
             if not os.path.exists(out_path):
                 os.makedirs(out_path)
-        self._run_suite('positive')
-        self._run_suite('negative')
+        asyncio.run(self._run_suites())
         print('')
         return self.eval_result
 
-    def _run_suite(self, suite: str):
+    async def _run_suites(self):
+        await self._run_suite('positive')
+        await self._run_suite('negative')
+
+    async def _run_suite(self, suite: str):
         from pathlib import Path
         clear_line = '\r' + ' ' * os.get_terminal_size().columns + '\r'
+        tasks: list[asyncio.Task[tuple[str, result.Case]|None]] = []
         for test_case in Path(os.path.join(self.test_suite_dir, suite)).glob('**/*.c'):
             for name, tool in self.config.tools.items():
                 self.processed_case_cnt = self.processed_case_cnt + 1
@@ -92,6 +106,18 @@ class Engine:
                 if self.eval_result.get(name) is None:
                     self.eval_result[name] = result.Tool(positive=[],negative=[])
                 executor = Executor(name ,tool, self.eval_root, self.test_suite_dir, self.out_dir)
-                case_result = executor.execute(str(test_case.resolve()))
-                if case_result is not None:
-                    getattr(self.eval_result[name], suite).append(case_result)
+                import argument
+                if len(tasks) >= argument.parallel:
+                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    tasks = list(pending)
+                    self._add_result(suite, done)
+                tasks.append(asyncio.create_task(executor.execute(str(test_case.resolve()))))
+        if len(tasks) != 0:
+            self._add_result(suite, (await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED))[0])
+        
+    def _add_result(self, suite: str, tasks: set[asyncio.Task[tuple[str, result.Case]|None]]):
+        for task in tasks:
+            if (result := task.result()) is not None:
+                tool_name, case_result = result
+                getattr(self.eval_result[tool_name], suite).append(case_result)
+                

@@ -10,7 +10,7 @@ html_header = '''<!DOCTYPE html>
 <html>
 <head> 
 <meta charset="utf-8"> 
-<title>evaluation verbose output</title>
+<title>evaluation outputs</title>
 </head>
 <body>
 '''
@@ -121,7 +121,9 @@ class Printer:
             cases =  getattr(tool_result, suite)
             for case_result in cases:
                 names.add(os.path.relpath(case_result.name, os.path.join(self.prefix, suite)))
-        return list(names)
+        name_list = list(names)
+        name_list.sort()
+        return name_list
 
     def _calculate_detection_rate(self, tool_result: Tool) -> float|None:
         return sum(map(lambda r: r.alarmed, tool_result.positive)) / len(tool_result.positive) * 100 if len(tool_result.positive) != 0 else None

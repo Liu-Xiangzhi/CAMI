@@ -14,11 +14,11 @@
             "description" : "GCC with UBSan, ASan",
             "commands" : [
                 {
-                    "command": "gcc ${input} -O0 -fsanitize=undefined -fsanitize=address -o ${local_out_dir}/out.elf",
+                    "command": "gcc ${input} -O0 -fsanitize=undefined -fsanitize=address -o ${local_out_dir}/${output}",
                     "interrupt_on_error": true
                 },
                 {
-                    "command": "${local_out_dir}/out.elf",
+                    "command": "${local_out_dir}/${output}",
                     "interrupt_on_error": false
                 }
             ],
@@ -28,11 +28,11 @@
             "description" : "Clang with UBSan",
             "commands" : [
                 {
-                    "command": "clang-12 ${input} -O0 -fsanitize=undefined -fsanitize-trap=undefined -o ${local_out_dir}/out.elf",
+                    "command": "clang-12 ${input} -O0 -fsanitize=undefined -fsanitize-trap=undefined -o ${local_out_dir}/${output}",
                     "interrupt_on_error": true
                 },
                 {
-                    "command": "${local_out_dir}/out.elf",
+                    "command": "${local_out_dir}/${output}",
                     "interrupt_on_error": false
                 }
             ],
@@ -52,7 +52,7 @@
             "description" : "clang tools",
             "commands" : [
                 {
-                    "command": "scan-build -o ${local_out_dir} clang ${input} -o ${local_out_dir}/a.elf",
+                    "command": "scan-build -o ${local_out_dir} clang ${input} -o ${local_out_dir}/${unique}.elf",
                     "interrupt_on_error": false
                 }
             ],
@@ -73,11 +73,11 @@
             "description" : "Valgrind",
             "commands" : [
                 {
-                    "command": "gcc -O0 -g ${input} -o ${local_out_dir}/out.elf",
+                    "command": "gcc -O0 -g ${input} -o ${local_out_dir}/${output}",
                     "interrupt_on_error": true
                 },
                 {
-                    "command": "valgrind --tool=memcheck --trace-children=yes ${local_out_dir}/out.elf",
+                    "command": "valgrind --tool=memcheck --trace-children=yes ${local_out_dir}/${output}",
                     "interrupt_on_error": false
                 }
             ],
@@ -87,11 +87,11 @@
             "description" : "kcc",
             "commands" : [
                 {
-                    "command": "kcc ${input} -o ${local_out_dir}/out.elf",
+                    "command": "kcc ${input} -o ${local_out_dir}/${output}",
                     "interrupt_on_error": true
                 },
                 {
-                    "command": "${local_out_dir}/out.elf",
+                    "command": "${local_out_dir}/${output}",
                     "interrupt_on_error": false
                 }
             ],
@@ -112,6 +112,10 @@
         {
             "tool" : "CAMI",
             "rule" : []
+        },
+        {
+            "tool" : "kcc",
+            "rule" : ["!positive/ub25/4\\.c|negative/ub24/(1|2|4)\\.c"]
         }
     ]
 }

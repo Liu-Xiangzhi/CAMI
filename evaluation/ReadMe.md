@@ -3,7 +3,7 @@ Evaluation
 
 ## Introduction
 To demonstrate the ability of UB detection of CAMI, we did that:
-+ constructed 100+ test cases(for positive/negative suite each)
++ constructed 100+ test cases(including positive&negative suite)
 + built a automatic testing framework using python
 + configured an environment for evaluation using docker
 
