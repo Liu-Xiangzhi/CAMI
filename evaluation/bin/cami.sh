@@ -17,4 +17,4 @@ if [ -z "$out_dir" ]; then
     exit 1
 fi
 
-exec cami run $(echo "$input" | sed "s#$test_suite_dir/\\(.*\\)\\.c#$out_dir/cami/\\1.tbc#")
+exec cami run $(echo "$input" | sed "s#$test_suite_dir/\\(.*\\)\\.c#$out_dir/\\1.tbc#")

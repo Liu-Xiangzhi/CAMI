@@ -65,38 +65,33 @@ class Engine:
     def run(self, eval_root: str, test_suite_dir: str, out_dir: str) -> dict[str, result.Tool]:
         import os
         import glob
-        from pathlib import Path
-        eval_result: dict[str, result.Tool] = {}
-        tool_test_cases_num = len(glob.glob(os.path.join(test_suite_dir, '**/*.c'))) * len(self.config.tools)
-        processed_case_cnt = 0
-        clear_line = '\r' + ' ' * os.get_terminal_size().columns + '\r'
+        self.tool_test_cases_num = len(glob.glob(os.path.join(test_suite_dir, '**/*.c'))) * len(self.config.tools)
+        self.processed_case_cnt = 0
+        self.eval_root = eval_root
+        self.test_suite_dir = test_suite_dir
+        self.out_dir = out_dir
+        self.eval_result: dict[str, result.Tool] = {}
         for tool_name in self.config.tools.keys():
             out_path = os.path.join(out_dir, re.sub(r'\s', '_', tool_name))
             if not os.path.exists(out_path):
                 os.makedirs(out_path)
-        for test_case in Path(os.path.join(test_suite_dir, 'positive')).glob('**/*.c'):
-            for name, tool in self.config.tools.items():
-                processed_case_cnt = processed_case_cnt + 1
-                print(f'{clear_line}processing {name} {test_case} [{processed_case_cnt}/{tool_test_cases_num}]', end='', flush=True)
-                if not filte(self.config.filter, name, str(test_case.resolve())):
-                    continue
-                if eval_result.get(name) is None:
-                    eval_result[name] = result.Tool(positive=[],negative=[])
-                executor = Executor(name ,tool, eval_root, test_suite_dir, out_dir)
-                case_result = executor.execute(str(test_case.resolve()))
-                if case_result is not None:
-                    eval_result[name].positive.append(case_result)
-        for test_case in Path(os.path.join(test_suite_dir, 'negative')).glob('**/*.c'):
-            for name, tool in self.config.tools.items():
-                processed_case_cnt = processed_case_cnt + 1
-                print(f'{clear_line}processing {name} {test_case} [{processed_case_cnt}/{tool_test_cases_num}]', end='', flush=True)
-                if not filte(self.config.filter, name, str(test_case.resolve())):
-                    continue
-                if eval_result.get(name) is None:
-                    eval_result[name] = result.Tool(positive=[],negative=[])
-                executor = Executor(name, tool, eval_root, test_suite_dir, out_dir)
-                case_result = executor.execute(str(test_case.resolve()))
-                if case_result is not None:
-                    eval_result[name].negative.append(case_result)
+        self._run_suite('positive')
+        self._run_suite('negative')
         print('')
-        return eval_result
+        return self.eval_result
+
+    def _run_suite(self, suite: str):
+        from pathlib import Path
+        clear_line = '\r' + ' ' * os.get_terminal_size().columns + '\r'
+        for test_case in Path(os.path.join(self.test_suite_dir, suite)).glob('**/*.c'):
+            for name, tool in self.config.tools.items():
+                self.processed_case_cnt = self.processed_case_cnt + 1
+                print(f'{clear_line}processing {name} {test_case} [{self.processed_case_cnt}/{self.tool_test_cases_num}]', end='', flush=True)
+                if not filte(self.config.filter, name, str(test_case.resolve())):
+                    continue
+                if self.eval_result.get(name) is None:
+                    self.eval_result[name] = result.Tool(positive=[],negative=[])
+                executor = Executor(name ,tool, self.eval_root, self.test_suite_dir, self.out_dir)
+                case_result = executor.execute(str(test_case.resolve()))
+                if case_result is not None:
+                    getattr(self.eval_result[name], suite).append(case_result)

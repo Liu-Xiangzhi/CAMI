@@ -1,0 +1,1 @@
+negative testsuite for ub10 is same as those in ub9

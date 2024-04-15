@@ -11,10 +11,11 @@ def get_help_info(self_name:str):
            f'       {self_name} [-c <config_path>|--config=<config_path>]' +\
             '                   [-t <testsuit_dir>|--testsuite=<testsuit_dir>]' +\
             '                   [-o <out_dir>|--out=<out_dir>]'+\
-            '                   [-v|--verbose]'
+            '                   [-v|--verbose]' +\
+            '                   [--verbose-output-path=<verbose_output_path>]'
 
 def parser_cli(argv: list[str]):
-    opts, _ = getopt.getopt(argv[1:], 'hvc:t:o:', ['help', 'verbose', 'config=', 'testsuit=', 'out='])
+    opts, _ = getopt.getopt(argv[1:], 'hvc:t:o:', ['help', 'verbose', 'config=', 'testsuit=', 'out=', 'verbose-output-path='])
     for opt, arg in opts:
         match opt:
             case '-h' | '--help':
@@ -27,6 +28,8 @@ def parser_cli(argv: list[str]):
                 argument.out_dir = os.path.abspath(arg)
             case '-v' | '--verbose':
                 argument.verbose = True
+            case '--verbose-output-path':
+                argument.verbose_output_path = os.path.abspath(arg)
             case _:
                 raise ValueError(f'Unknown option: {opt}')
 

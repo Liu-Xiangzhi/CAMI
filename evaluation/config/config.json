@@ -4,7 +4,7 @@
             "description" : "C Abstract Machine Interpreter",
             "commands" : [
                 {
-                    "command": "${eval_root}/bin/cami.sh ${input} ${test_suite_dir} ${out_dir}",
+                    "command": "${eval_root}/bin/cami.sh ${input} ${test_suite_dir} ${local_out_dir}",
                     "interrupt_on_error": false
                 }
             ],
@@ -46,13 +46,13 @@
                     "interrupt_on_error": false
                 }
             ],
-            "detect_word" : "error|warning|portablity"
+            "detect_word" : "error|warning|portability"
         },
         "scan-build" : {
             "description" : "clang tools",
             "commands" : [
                 {
-                    "command": "scan-build -o ${local_out_dir} clang ${input}",
+                    "command": "scan-build -o ${local_out_dir} clang ${input} -o ${local_out_dir}/a.elf",
                     "interrupt_on_error": false
                 }
             ],

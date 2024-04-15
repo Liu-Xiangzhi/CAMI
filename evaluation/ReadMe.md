@@ -9,15 +9,16 @@ To demonstrate the ability of UB detection of CAMI, we did that:
 
 After evaluation, you can get:
 + detection result for each test case
-+ overall detection rate & false-positive rate & productivity metric
++ overall statistic including detection rate(in percent) & false-positive rate & productivity metric(geometric average of detection rate and 100% minus false-positive)
 + comparison among various detection tools(see next section)
 
 ### Detection tools
-+ GCC with UBSan, MSan, ASan
-+ Clang with UBSan, MSan, ASan
-+ cppcheck
-+ scan-build
-+ Frama-C (Value Analysis)
++ CAMI
++ GCC with UBSan, ASan
++ Clang with UBSan
++ cppcheck (static analysis)
++ scan-build (static analysis)
++ Frama-C (Value Analysis) (static analysis)
 + Valgrind
 + kcc
 + Compcert C Interpreter
@@ -30,7 +31,7 @@ docker build -f ./evaluation/Dockerfile -t cami_eval .
 
 ## Run evaluation
 ```shell
-docker run -it --ulimit nofile=65536:65536 cami_eval
+docker run -it --ulimit nofile=65536:65536 -p 8080:8000 cami_eval
 # below are commands executed in docker container
 cd cami
 python evaluation/main.py
