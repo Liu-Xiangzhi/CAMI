@@ -2,6 +2,8 @@ CAMI
 -----------
 C Abstract Machine Interpreter, also an examiner of your C programs.
 
+See [here](./doc/index.md) for other languages.
+
 ## Introduction
 TBD
 
