@@ -93,10 +93,16 @@ class Printer:
     def _print_overall_info(self, eval_result: dict[str, Tool]):
         def print_overall_info(tool_results: list[Tool], tool_name_lens: list[int], info: str):
             print('\t{:<19}'.format(info), end='')
-            for i, tool_result in enumerate(tool_results):
-                rate = getattr(self, '_calculate_'+info.replace(' ', '_'))(tool_result)
+            rates = [getattr(self, '_calculate_'+info.replace(' ', '_'))(tool_result) for _, tool_result in enumerate(tool_results)]
+            best = min(rates) if info == 'false positive rate' else max(rates)
+            worst = max(rates) if info == 'false positive rate' else min(rates)
+            for i, rate in enumerate(rates):
                 if rate is not None:
+                    color = "\033[34m" if rate == best else ("\033[31m" if rate == worst else "")
+                    clear = "\033[0m" if rate == best or rate == worst else ""
+                    print(f'{color}', end='')
                     print('  {:>{width}.2f}%'.format(rate, width=tool_name_lens[i] - 1), end='')
+                    print(f'{clear}', end='')
                 else:
                     print('  {:>{width}}'.format('-', width=tool_name_lens[i]), end='')
             print('')
