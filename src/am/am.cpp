@@ -33,10 +33,10 @@ AbstractMachine::ExitCode AbstractMachine::run()
     try {
         this->execute();
     } catch (const ObjectStorageOutOfMemoryException& e) {
-        std::cerr << e.what() << std::endl;
+        log::unbuffered.eprintln(e.what());
         return ExitCode::abort;
     } catch (const IgnorableException& e) {
-        std::cerr << e.what() << std::endl;
+        log::unbuffered.eprintln(e.what());
         return ExitCode::exception;
     }
     return ExitCode::halt;

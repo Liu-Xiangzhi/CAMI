@@ -23,6 +23,7 @@
 #include <lib/utils.h>
 #include <lib/format.h>
 #include <cstdint>
+#include <algorithm>
 
 namespace cami::ts {
 using kind_t = int;
@@ -38,6 +39,8 @@ enum class Kind : kind_t
     pointer, array, function,
     struct_, union_,
     qualify,
+    _value_tag, // below is not part of type system, it's just a tag for `Value`
+    dissociative_pointer,
     ivd, // invalid type
 };
 
@@ -194,7 +197,7 @@ public:
 protected:
     explicit Pointer(const Type& referenced) : referenced(referenced)
     {
-        ASSERT(referenced.kind() != Kind::null, "invalid reference type");
+        ASSERT(referenced.kind() != Kind::null && referenced.kind() < Kind::_value_tag, "invalid reference type");
     }
 
     ~Pointer() = default;
@@ -231,7 +234,7 @@ protected:
     Array(const Type& element, size_t len) : element(element), len(len)
     {
         ASSERT(this->len > 0, "invalid length");
-        ASSERT(element.kind() != Kind::null, "invalid element type");
+        ASSERT(element.kind() != Kind::function && element.kind() < Kind::_value_tag, "invalid element type");
     }
 
     ~Array() = default;
@@ -266,7 +269,13 @@ public:
 
 protected:
     Function(const Type& returned, lib::Array<const Type*> params)
-            : returned(returned), params(std::move(params)) {}
+            : returned(returned), params(std::move(params))
+    {
+        ASSERT(this->returned.kind() != Kind::function && this->returned.kind() < Kind::_value_tag, "invalid return type");
+        ASSERT(std::all_of(this->params.begin(), this->params.end(), [](const Type* item) {
+            return item->kind() != Kind::function && item->kind() != Kind::void_ && item->kind() < Kind::_value_tag;
+        }), "invalid param type");
+    }
 
     ~Function() = default;
 
@@ -290,7 +299,12 @@ public:
 
 protected:
     Struct(std::string name, lib::Array<const Type*> members)
-            : name(std::move(name)), members(std::move(members)) {}
+            : name(std::move(name)), members(std::move(members))
+    {
+        ASSERT(std::all_of(this->members.begin(), this->members.end(), [](const Type* item) {
+            return item->kind() != Kind::function && item->kind() < Kind::_value_tag;
+        }), "invalid member type");
+    }
 
     ~Struct() = default;
 public:
@@ -323,7 +337,12 @@ public:
 
 protected:
     Union(std::string name, lib::Array<const Type*> members)
-            : name(std::move(name)), members(std::move(members)) {}
+            : name(std::move(name)), members(std::move(members))
+    {
+        ASSERT(std::all_of(this->members.begin(), this->members.end(), [](const Type* item) {
+            return item->kind() != Kind::function && item->kind() < Kind::_value_tag;
+        }), "invalid member type");
+    }
 
     ~Union() = default;
 public:
@@ -373,7 +392,8 @@ protected:
     Qualify(const Type& qualified, Qualifier qualifier)
             : qualified(qualified), qualifier(qualifier)
     {
-        ASSERT(qualified.kind() != Kind::qualify && qualified.kind() != Kind::function, "invalid qualify derivation");
+        ASSERT(qualified.kind() != Kind::qualify && qualified.kind() != Kind::function && qualified.kind() < Kind::_value_tag,
+               "invalid qualify derivation");
     }
 
     ~Qualify() = default;

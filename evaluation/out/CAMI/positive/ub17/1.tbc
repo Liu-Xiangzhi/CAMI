@@ -1,0 +1,81 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_double.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "positive/ub17/1.c"
+            frame_size: 16
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: x
+                        dsg_id: 0
+                        type: f64
+                        offset: 0
+                    }
+                    {
+                        name: y
+                        dsg_id: 1
+                        type: f32
+                        offset: 8
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (6, 22)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (7, 28)
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    push <f64; 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.0>
+                    mdfi
+                    fe 0
+                    dsg 0
+                    read 0
+                    cast f32
+                    dsg 1
+                    mdfi
+                    fe 1
+                    dsg 1
+                    read 0
+                    cast f64
+                    dsg print_double
+                    addr
+                    call 1
+                    fe 2
+                    push <i32; 0>
+                    ret
+                .
+        }
+    ]

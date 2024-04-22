@@ -1,0 +1,317 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+.function
+    [
+        {
+            segment: execute
+            name: print_int
+            type: u64 -> void
+            file_name: "libio/print_int.tbc"
+            frame_size: 16
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: number
+                        dsg_id: 0
+                        type: u64
+                        offset: 0
+                    }
+                    {
+                        name: i
+                        dsg_id: 1
+                        type: u64
+                        offset: 8
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    mdfi
+                    dsg 1
+                    push <u64; 0>
+                    mdfi
+                    fe 0
+                    push <u64; 0x30> # '0'
+                    dsg putc
+                    addr
+                    call 0
+                    fe 1
+                    push <u64; 0x78> # 'x'
+                    dsg putc
+                    addr
+                    call 0
+                loop:
+                    fe 2
+                    dsg 1
+                    read 0
+                    push <u64; 8>
+                    sl
+                    jnt exit_loop
+                    fe 3
+                    dsg 0
+                    read 0
+                    push <u64; 56>
+                    rs
+                    dsg print_byte
+                    addr
+                    call 1
+                    fe 4
+                    dsg 0
+                    read 0
+                    push <u64; 8>
+                    ls
+                    mdf 1
+                    fe 5
+                    dsg 1
+                    read 0
+                    push <u64; 1>
+                    add
+                    mdf 1
+                    j loop
+                exit_loop:
+                    fe 6
+                    push <u64; 0x0a> # '\n'
+                    dsg putc
+                    addr
+                    call 0
+                    ret
+                .
+        }
+        {
+            segment: execute
+            name: print_byte
+            type: u64 -> void
+            file_name: "libio/print_int.tbc"
+            frame_size: 0
+            max_object_num: 0
+            blocks: [
+                []
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    fe 0
+                    dup
+                    push <u64; 4>
+                    rs
+                    dup
+                    push <u64; 10>
+                    sl
+                    jnt great_than_ten
+                    push <u64; 0x30> # '0'
+                    add
+                    dsg putc
+                    addr
+                    call 0
+                    j next_hex
+                great_than_ten:
+                    push <u64; 55> # 'A' - 10
+                    add
+                    dsg putc
+                    addr
+                    call 1
+                next_hex:
+                    fe 1
+                    push <u64; 0xf>
+                    and
+                    dup
+                    push <u64; 10>
+                    sl
+                    jnt great_than_ten2
+                    push <u64; 0x30> # '0'
+                    add
+                    dsg putc
+                    addr
+                    call 0
+                    j exit_print_byte
+                great_than_ten2:
+                    push <u64; 55> # 'A' - 10
+                    add
+                    dsg putc
+                    addr
+                    call 1
+                exit_print_byte:
+                    ret
+                .
+        }
+        {
+            segment: execute
+            name: putc
+            type: u64 -> void
+            file_name: "libio/print_int.tbc"
+            frame_size: 8
+            max_object_num: 1
+            blocks: [
+                [
+                    {
+                        name: ch
+                        dsg_id: 0
+                        type: u64
+                        offset: 0
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    mdfi
+                    # set fd
+                    fe 0
+                    push <u64; 0x8000000000000008>
+                    cast u64*
+                    drf
+                    push <u64; 1>
+                    mdf 0
+                    # set addr
+                    fe 1
+                    dsg 0
+                    addr
+                    cast u64
+                    push <u64; 0x8000000000000010>
+                    cast u64*
+                    drf
+                    mdf 0
+                    # set len
+                    fe 2
+                    push <u64; 0x8000000000000018>
+                    cast u64*
+                    drf
+                    push <u64; 1>
+                    mdf 0
+                    # do write
+                    fe 3
+                    push <u64; 0x8000000000000000>
+                    cast u64*
+                    drf
+                    push <u64; 3>
+                    mdf 0
+                    ret
+                .
+        }
+    ]

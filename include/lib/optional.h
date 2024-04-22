@@ -19,6 +19,7 @@
 
 #include <optional>
 #include <memory>
+#include <lib/assert.h>
 
 namespace cami::lib {
 namespace detail {
@@ -137,21 +138,25 @@ public:
 
     constexpr const T* operator->() const noexcept
     {
+        ASSERT(this->has_value(), "unwrap empty optional");
         return &this->val;
     }
 
     constexpr const T& operator*() const noexcept
     {
+        ASSERT(this->has_value(), "unwrap empty optional");
         return this->val;
     }
 
     constexpr T* operator->() noexcept
     {
+        ASSERT(this->has_value(), "unwrap empty optional");
         return &this->val;
     }
 
     constexpr T& operator*() noexcept
     {
+        ASSERT(this->has_value(), "unwrap empty optional");
         return this->val;
     }
 

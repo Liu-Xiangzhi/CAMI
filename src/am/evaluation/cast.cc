@@ -398,7 +398,7 @@ signed_int_to_f64:
 unsigned_int_to_f64:
     {
         auto& v = this->get<IntegerValue>();
-        this->value = new F32Value{static_cast<float>(v.val)};
+        this->value = new F64Value{static_cast<double>(v.val)};
         ValueBox::delete_(&v);
     }
     return;
@@ -457,26 +457,25 @@ no_cast:
 }
 
 namespace {
-// specific rules for `resolveObjectDesignation`
-lib::Optional<Object*> do_resolveObjectDesignation(Object* object, const Type& type) // NOLINT
+// determine whether `object` or its subobject or subsubobject ...(all with the same address) is designated
+lib::Optional<Object*> resolveObjectDesignation(Object* object, const Type& type) // NOLINT
 {
-    ASSERT(type.kind() != Kind::qualify && type.kind() != Kind::function, "precondition violation");
-    auto& obj_type = removeQualify(object->effective_type);
-    if (&obj_type == &type) {
+    ASSERT(type.kind() != Kind::function, "precondition violation");
+    if (&object->effective_type == &type) {
         return object;
     }
-    switch (obj_type.kind()) {
+    switch (removeQualify(object->effective_type).kind()) {
     case Kind::array:
         ASSERT(object->sub_objects.length() > 0, "length of array cannot be zero");
-        return do_resolveObjectDesignation(object->sub_objects[0], type);
+        return resolveObjectDesignation(object->sub_objects[0], type);
     case Kind::struct_:
         if (object->sub_objects.empty()) {
             return {};
         }
-        return do_resolveObjectDesignation(object->sub_objects[0], type);
+        return resolveObjectDesignation(object->sub_objects[0], type);
     case Kind::union_:
         for (Object* item: object->sub_objects) {
-            if (do_resolveObjectDesignation(item, type)) {
+            if (resolveObjectDesignation(item, type)) {
                 return item;
             }
         }
@@ -487,28 +486,19 @@ lib::Optional<Object*> do_resolveObjectDesignation(Object* object, const Type& t
     }
 }
 
-// determine whether `object` or its subobject or subsubobject ...(all with the same address) is designated
-Object* resolveObjectDesignation(Object* object, const Type& type)
-{
-    ASSERT(type.kind() == Kind::pointer, "precondition violation");
-    auto& ref_type = removeQualify(down_cast<const Pointer&>(type).referenced);
-    auto obj = do_resolveObjectDesignation(object, ref_type);
-    // if `do_resolveObjectDesignation` fail, just designate the top object
-    return obj ? object : *obj;
-}
-
-// designate the immediate subobject of `object`, which address deviates `offset` byte from `object`
-Object* designateSubObject(Object* object, uint64_t offset) // NOLINT
+lib::Optional<Object*> designateObject(Object* object, uint64_t offset, const Type& type) // NOLINT
 {
     if (offset == 0) {
-        return object;
+        return resolveObjectDesignation(object, type);
     }
     auto& obj_type = removeQualify(object->effective_type);
     if (obj_type.kind() == Kind::array) {
         auto sub_obj_size = down_cast<const Array&>(obj_type).element.size();
-        ASSERT(offset / sub_obj_size < object->sub_objects.length(),
-               "invalid offset or sub_object size miss matches the type size");
-        return designateSubObject(object->sub_objects[offset / sub_obj_size], offset % sub_obj_size);
+        // this situation may happen due to internal padding of struct
+        if (offset / sub_obj_size >= object->sub_objects.length()) {
+            return {};
+        }
+        return designateObject(object->sub_objects[offset / sub_obj_size], offset % sub_obj_size, type);
     } else if (obj_type.kind() == Kind::struct_) {
         auto& t = down_cast<const Struct&>(obj_type);
         uint64_t off = 0;
@@ -516,29 +506,34 @@ Object* designateSubObject(Object* object, uint64_t offset) // NOLINT
             off = lib::roundUp(off, t.members[i]->align()) + t.members[i]->size();
             if (off > offset) {
                 ASSERT(i < object->sub_objects.length(), "invalid offset or sub_object size miss matches the type size");
-                return designateSubObject(object->sub_objects[i], offset - (off - t.members[i]->size()));
+                return designateObject(object->sub_objects[i], offset - (off - t.members[i]->size()), type);
             }
         }
-        UNREACHABLE();
-    } else {
         return nullptr;
+    } else if (obj_type.kind() == Kind::union_) {
+        for (auto item: object->sub_objects) {
+            if (auto o = designateObject(item, offset, type); o) {
+                return o;
+            }
+        }
+        return {};
+    } else if (isCCharacter(type.kind()) && offset <= object->effective_type.size()) {
+        return object;
     }
-    UNREACHABLE();
+    return {};
 }
-} // anonymous namespace
 
-void Execute::castPointerToInteger(cami::ValueBox& operand, const ts::Type& type)
+void checkPointerToInteger(uint64_t pointer_address, const ts::Type& type)
 {
-    auto addr = operand.get<PointerValue>().getAddress();
     auto kind = type.kind() == Kind::char_ ? Kind::i8 : type.kind();
     ASSERT(isStrictInteger(kind), "precondition violation");
     uint64_t max = getMaxValue(kind);
-    if (addr > max) {
+    if (pointer_address > max) {
         throw UBException{{UB::cast_to_or_from_integer}, lib::format(
-                "result(${}) of pointer type cannot cast to integer type `${}`", addr, type)};
+                "result(${x}) of pointer type cannot cast to integer type `${}`", pointer_address, type)};
     }
-    operand = ValueBox{new IntegerValue{&type, addr}};
 }
+} // anonymous namespace
 
 void Execute::castIntegerToPointer(AbstractMachine& am, ValueBox& operand, const Type& type)
 {
@@ -546,35 +541,30 @@ void Execute::castIntegerToPointer(AbstractMachine& am, ValueBox& operand, const
     auto int_val = operand.get<IntegerValue>().uint64();
     auto itr = am.state.entities.upper_bound(int_val);
     if (itr == am.state.entities.begin()) {
-        throw ConstraintViolationException{lib::format("Cannot cast integer(${x}) to pointer", int_val)};
+        operand = ValueBox{new DissociativePointerValue{&type, int_val}};
+        return;
     }
     --itr;
     auto entity = itr->second;
     auto& ref_type = removeQualify(down_cast<const Pointer&>(type).referenced);
     if (entity->effective_type.kind() == Kind::function || ref_type.kind() == Kind::function) {
         if (int_val != itr->first) {
-            throw ConstraintViolationException{lib::format("Cannot cast integer(${x}) to pointer", int_val)};
+            operand = ValueBox{new DissociativePointerValue{&type, int_val}};
+        } else {
+            operand = ValueBox{new PointerValue{&type, entity, 0}};
         }
-        operand = ValueBox{new PointerValue{&type, entity, 0}};
         return;
     }
     auto* obj = down_cast<Object*>(entity);
     if (int_val - itr->first >= obj->effective_type.size()) {
-        throw ConstraintViolationException{lib::format("Cannot cast integer(${x}) to pointer", int_val)};
+        operand = ValueBox{new DissociativePointerValue{&type, int_val}};
+        return;
     }
-    auto ref_obj = [&]() -> Object* {
-        if (int_val == itr->first) {
-            return resolveObjectDesignation(obj, type);
-        }
-        if (auto o = designateSubObject(obj, int_val - itr->first); o != nullptr) {
-            return resolveObjectDesignation(o, type);
-        }
-        return nullptr;
-    }();
-    if (ref_obj == nullptr) {
-        throw ConstraintViolationException{lib::format("Cannot cast integer(${x}) to pointer", int_val)};
+    if (auto ref_obj = designateObject(obj, int_val - itr->first, ref_type);ref_obj) {
+        operand = ValueBox{new PointerValue{&type, *ref_obj, int_val - (*ref_obj)->address}};
+        return;
     }
-    operand = ValueBox{new PointerValue{&type, ref_obj, 0}};
+    operand = ValueBox{new DissociativePointerValue{&type, int_val}};
 }
 
 void Execute::castPointerToPointer(ValueBox& operand, const ts::Type& type)
@@ -595,27 +585,28 @@ void Execute::castPointerToPointer(ValueBox& operand, const ts::Type& type)
         ptr.set(&type);
         return;
     }
-    if (ptr.getAddress() & (cast_type_ref_type.align() - 1)) { // equivalent to `ptr.getAddress() % type.align()`
+    // equivalent to `ptr.getAddress() % type.align()`
+    if (cast_type_ref_type.kind() != Kind::void_ && ptr.getAddress() & (cast_type_ref_type.align() - 1)) {
         throw UBException{{UB::unaligned_ptr_cast}, lib::format(
                 "pointer cast from `${}` to an unaligned type `${}`", ptr.getType(), type)};
     }
-    if (ptr.getOffset() == 0) {
-        ASSERT(((cast_type_ref_type.align() - 1) & cast_type_ref_type.align()) == 0, "align must be the power of 2");
-        // cast may cause change of referenced object
-        //  e.g. `int (*) [2]` cast to `int*`, referenced object changes from array to int
-        if (auto obj = ptr.getReferenced(); obj) {
-            ptr.set(resolveObjectDesignation(&down_cast<Object&>(**obj).top(), type));
-        } else {
-            ptr.set(&type);
+    ASSERT(cast_type_ref_type.kind() == Kind::void_ || ((cast_type_ref_type.align() - 1) & cast_type_ref_type.align()) == 0,
+           "align must be the power of 2");
+    // cast may cause change of referenced object
+    //  e.g. `int (*) [2]` cast to `int*`, referenced object changes from array to int
+    if (auto obj = ptr.getReferenced(); obj) {
+        auto top_obj = &down_cast<Object&>(**obj).top();
+        auto _new_ref_obj = designateObject(top_obj, ptr.getAddress() - top_obj->address, cast_type_ref_type);
+        auto new_ref_obj = _new_ref_obj ? *_new_ref_obj : *obj;
+        auto offset = ptr.getAddress() - new_ref_obj->address;
+        if (!isCCharacter(type.kind()) && offset != 0 && offset != new_ref_obj->effective_type.size()) {
+            throw ConstraintViolationException{
+                    lib::format("pointer cast from `${}` to type `${}` caused indeterminate object designation", ptr.getType(), type)};
         }
-        return;
+        ptr.set(&type, new_ref_obj, offset);
+    } else {
+        ptr.set(&type);
     }
-    ASSERT(ptr.getReferenced().has_value(), "invariant violation");
-    if (!isCCharacter(cast_type_ref_type.kind())
-        && !isLoosestCompatible((*ptr.getReferenced())->effective_type, cast_type_ref_type)) {
-        throw ConstraintViolationException{lib::format("Cannot cast pointer(${}) to type `${}`", ptr, type)};
-    }
-    ptr.set(&type);
 }
 
 void Execute::cast(AbstractMachine& am, InstrInfo info)
@@ -623,35 +614,57 @@ void Execute::cast(AbstractMachine& am, InstrInfo info)
     // evaluation of cast expression will discard qualifier of the type of the result
     //  so type to which cast has no meaning to be qualified
     COMPILER_GUARANTEE(info.getTypeID() < am.static_info.types.length(),
-                       lib::format("Value(${}) of type id out of boundary(${})",
-                                   info.getTypeID(), am.static_info.types.length()));
+                       lib::format("Value(${}) of type id out of boundary(${})", info.getTypeID(), am.static_info.types.length()));
     auto& type = removeQualify(*am.static_info.types[info.getTypeID()]);
     auto& rich_value = am.operand_stack.top();
     if (rich_value.attr.indeterminate) {
         return;
     }
     auto& operand = rich_value.vb;
-    COMPILER_GUARANTEE(isScalar(operand->getType().kind()) && isScalar(type.kind()), lib::format(
-            "invalid type in cast operator. cast from `${}` to `${}`", operand->getType(), type));
+    COMPILER_GUARANTEE(isScalar(type.kind()) &&
+                       (isScalar(operand->getType().kind()) || operand->getType().kind() == Kind::dissociative_pointer),
+                       lib::format("invalid type in cast operator. cast from `${}` to `${}`", operand->getType(), type));
     if (operand->getType().kind() == Kind::null) {
         if (type.kind() == Kind::pointer) {
             operand = ValueBox{new PointerValue{&type, nullptr, 0}};
         } else if (type.kind() == Kind::bool_) {
             operand = ValueBox{new IntegerValue{false}};
         } else {
-            COMPILER_GUARANTEE(type.kind() == Kind::null, lib::format(
-                    "cast nullptr to a non-nullptr_t type `${}`", type));
+            COMPILER_GUARANTEE(type.kind() == Kind::null, lib::format("cast nullptr to a non-nullptr_t type `${}`", type));
         }
     } else if (operand->getType().kind() == Kind::pointer) {
         if (type.kind() == Kind::pointer) {
             Execute::castPointerToPointer(operand, type);
         } else {
-            COMPILER_GUARANTEE(isInteger(type.kind()), lib::format(
-                    "cast pointer to a non-pointer non-integer type `${}`", type));
+            COMPILER_GUARANTEE(isInteger(type.kind()), lib::format("cast pointer to a non-pointer non-integer type `${}`", type));
             if (type.kind() == Kind::bool_) {
                 operand = ValueBox{new IntegerValue{!operand.get<PointerValue>().isZero()}};
             } else {
-                Execute::castPointerToInteger(operand, type);
+                auto addr = operand.get<PointerValue>().getAddress();
+                checkPointerToInteger(addr, type);
+                operand = ValueBox{new IntegerValue{&type, addr}};
+            }
+        }
+    } else if (operand->getType().kind() == Kind::dissociative_pointer) {
+        if (type.kind() == Kind::pointer) {
+            auto& op_type = operand.get<DissociativePointerValue>().pointer_type;
+            auto& op_ref_type = down_cast<const Pointer&>(*op_type).referenced;
+            auto& cast_ref_type = down_cast<const Pointer&>(type).referenced;
+            if (op_ref_type.kind() != Kind::function && cast_ref_type.kind() != Kind::function && cast_ref_type.kind() != Kind::void_ &&
+                // equivalent to `address % align != 0`
+                (operand.get<DissociativePointerValue>().address & (cast_ref_type.align() - 1))) {
+                throw UBException{{UB::unaligned_ptr_cast}, lib::format(
+                        "pointer cast from `${}` to an unaligned type `${}`", *op_type, type)};
+            }
+            op_type = &type;
+        } else {
+            COMPILER_GUARANTEE(isInteger(type.kind()), lib::format("cast pointer to a non-pointer non-integer type `${}`", type));
+            if (type.kind() == Kind::bool_) {
+                operand = ValueBox{new IntegerValue{operand.get<DissociativePointerValue>().address != 0}};
+            } else {
+                auto addr = operand.get<DissociativePointerValue>().address;
+                checkPointerToInteger(addr, type);
+                operand = ValueBox{new IntegerValue{&type, addr}};
             }
         }
     } else {
@@ -659,8 +672,7 @@ void Execute::cast(AbstractMachine& am, InstrInfo info)
         COMPILER_GUARANTEE(isArithmetic(type.kind()) || type.kind() == Kind::pointer, lib::format(
                 "cast arithmetic type object to a non-arithmetic non-pointer type `${}`", type));
         if (type.kind() == Kind::pointer) {
-            COMPILER_GUARANTEE(isInteger(operand->getType().kind()),
-                               "cast non-integer arithmetic type object to pointer");
+            COMPILER_GUARANTEE(isInteger(operand->getType().kind()), "cast non-integer arithmetic type object to pointer");
             Execute::castIntegerToPointer(am, operand, type);
         } else {
             operand.castTo(type);

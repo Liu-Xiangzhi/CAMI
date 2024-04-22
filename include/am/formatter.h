@@ -49,6 +49,7 @@ public:
     static std::string f32Value(const F32Value& value);
     static std::string f64Value(const F64Value& value);
     static std::string pointerValue(const PointerValue& value);
+    static std::string dissociativePointerValue(const DissociativePointerValue& value);
     static std::string structOrUnionValue(const StructOrUnionValue& value);
     static std::string nullValue();
     static std::string undefinedValue();

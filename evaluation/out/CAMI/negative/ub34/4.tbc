@@ -1,0 +1,198 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_int.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "negative/ub34/4.c"
+            frame_size: 8
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: i
+                        dsg_id: 0
+                        type: i32
+                        offset: 0
+                    }
+                    {
+                        name: j
+                        dsg_id: 1
+                        type: i32
+                        offset: 4
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (14, 6)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    push <i32; 1>
+                    dsg 0
+                    mdfi
+                    push <i32; 2>
+                    dsg 1
+                    mdfi
+                    fe 0
+                    push <i32; 0>
+                    dsg 0
+                    addr
+                    dsg 0
+                    addr
+                    dsg 1
+                    addr
+                    dsg f
+                    addr
+                    call 0
+                    fe 1
+                    push <i32; 0>
+                    ret
+                .
+        }
+        {
+            segment: execute
+            name: f
+            type: (i32, i32*, i32*) -> void
+            file_name: "negative/ub34/3.c"
+            frame_size: 72
+            max_object_num: 5
+            blocks: [
+                [
+                    {
+                        name: x
+                        dsg_id: 0
+                        type: i32
+                        offset: 0
+                    }
+                    {
+                        name: p
+                        dsg_id: 1
+                        type: i32*
+                        offset: 8
+                    }
+                    {
+                        name: q
+                        dsg_id: 2
+                        type: i32*
+                        offset: 24
+                    }
+                    {
+                        name: r
+                        dsg_id: 3
+                        type: i32*
+                        offset: 40
+                    }
+                    {
+                        name: s
+                        dsg_id: 4
+                        type: i32*
+                        offset: 56
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 3
+                    source_location: [
+                        (6, 14)
+                        (6, 22)
+                        (6, 26)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 7
+                    source_location: [
+                        (7, 22)
+                        (7, 21)
+                        (7, 21)
+                        (7, 33)
+                        (7, 32)
+                        (7, 32)
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                        [0, 1]
+                        []
+                        [3]
+                        [3, 4]
+                        [0, 1, 3, 4]
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    dsg 3
+                    mdfi
+                    dsg 2
+                    mdfi
+                    dsg 1
+                    mdfi
+                    dsg 0
+                    mdfi
+                    fe 0
+                    dsg 0
+                    read 0
+                    push <i32; 1>
+                    sg
+                    jnt else
+                    dsg 2
+                    read 1
+                    j end
+            else:
+                    dsg 3
+                    read 2
+            end:
+                    dsg 4
+                    mdfi
+                    fe 1
+                    dsg 1
+                    read 0
+                    drf
+                    read 1
+                    dup
+                    push <i32; 1>
+                    add
+                    mdf 2
+                    dsg 4
+                    read 3
+                    drf
+                    read 4
+                    push <i32; 1>
+                    add
+                    dup
+                    mdf 5
+                    add
+                    cast u64
+                    dsg print_int
+                    addr
+                    call 6
+                    ret
+                .
+        }
+    ]

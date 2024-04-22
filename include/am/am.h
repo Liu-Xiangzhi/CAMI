@@ -80,6 +80,13 @@ public:
     ExitCode run();
     void execute();
 private:
+    [[nodiscard]] bool isValidEntityAddress(uint64_t addr) const noexcept
+    {
+        auto func_addr = reinterpret_cast<uintptr_t>(this->static_info.functions.data());
+        auto func_end = reinterpret_cast<uintptr_t>(this->static_info.functions.data() + this->static_info.functions.length());
+        return addr == 0 /*nullptr*/ || this->object_manager.isValidObjectAddress(addr) ||
+               (addr >= func_addr && addr < func_end && (addr - func_addr) % sizeof(spd::Function) == 0);
+    };
     static void checkMetadataCnt(tr::LinkedMBC& bytecode);
     static tr::LinkedMBC& preprocessBytecode(tr::LinkedMBC& bytecode);
     spd::Global initStaticInfo(tr::LinkedMBC& bytecode);

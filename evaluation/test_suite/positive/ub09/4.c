@@ -19,6 +19,6 @@ int g()
 int main()
 {
     p = (int*)malloc(sizeof(int));
-    printf("%d\n", f() + g());
+    printf("%d\n", g() + f());
 }
 

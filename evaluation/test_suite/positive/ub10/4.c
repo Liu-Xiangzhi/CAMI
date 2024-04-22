@@ -5,7 +5,6 @@ static int* p;
 
 static int f(void);
 static int g(void);
-
 int f()
 {
     free(p);
@@ -17,9 +16,8 @@ int g()
     printf("%p", (void*)(p + 1));
     return 0;
 }
-
 int main()
 {
     p = (int*)malloc(sizeof(int));
-    printf("%d", f() + g());
+    printf("%d", g() + f());
 }

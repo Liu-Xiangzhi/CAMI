@@ -91,7 +91,7 @@ std::unique_ptr<LinkedMBC> Launcher::linkFile(std::unique_ptr<tr::UnlinkedMBC> m
     while (!queue.empty()) {
         auto file_name = queue.front();
         queue.pop();
-        if (loaded_files.find(file_name) == loaded_files.end()) {
+        if (loaded_files.find(file_name) != loaded_files.end()) {
             continue;
         }
         auto bc = Launcher::loadFile(file_name, Launcher::detectFileType(file_name) == FileType::text);

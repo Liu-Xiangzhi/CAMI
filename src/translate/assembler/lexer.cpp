@@ -93,6 +93,8 @@ std::unique_ptr<Token> Lexer::nextToken()
                 this->cur += 2;
                 return std::make_unique<Token>(Token::Type::arrow, this->cur);
             }
+            [[fallthrough]];
+        case '\'':
             return this->extractNumber();
         case '#':
             for (; this->cur < this->input.length(); this->cur++) {
@@ -143,64 +145,11 @@ std::unique_ptr<Token> Lexer::extractQuotedString()
             this->newlines.push_back(this->cur);
         }
         if (ch == '\\') {
-            if (++this->cur >= this->input.length()) {
-                this->diagnostic(this->cur, "missing escaped character");
+            auto escape_ch = this->extractEscapeCharacter();
+            if (!escape_ch) {
                 goto end;
             }
-            ch = this->input[this->cur];
-            switch (ch) {
-            case 'a':
-                ch = '\a';
-                break;
-            case 'b':
-                ch = '\b';
-                break;
-            case 'f':
-                ch = '\f';
-                break;
-            case 'n':
-                ch = '\n';
-                break;
-            case 'r':
-                ch = '\r';
-                break;
-            case 't':
-                ch = '\t';
-                break;
-            case 'v':
-                ch = '\v';
-                break;
-            case '\\':
-                ch = '\\';
-                break;
-            case '\"':
-                ch = '\"';
-                break;
-            case '\'':
-                ch = '\'';
-                break;
-            case '0':
-                ch = '\0';
-                break;
-            case 'x': {
-                if (this->cur + 2 >= this->input.length()) {
-                    this->diagnostic(this->input.length(), "missing hex digit");
-                    goto end;
-                }
-                auto high_4 = parseHex(this->input[++this->cur]);
-                if (high_4 == -1) {
-                    this->diagnostic(this->cur, "expect hex digit");
-                }
-                auto low_4 = parseHex(this->input[++this->cur]);
-                if (low_4 == -1) {
-                    this->diagnostic(this->cur, "expect hex digit");
-                }
-                ch = static_cast<char>((high_4 << 4) | low_4);
-                break;
-            }
-            default:
-                break;
-            }
+            ch = *escape_ch;
         }
         result.push_back(ch);
     }
@@ -268,6 +217,9 @@ std::unique_ptr<Token> Lexer::extractHexSequence()
 
 std::unique_ptr<Token> Lexer::extractNumber()
 {
+    if (this->input[this->cur] == '\'') {
+        return this->extractCharacter();
+    }
     bool hex = false;
     bool floating = false;
     const auto begin = this->cur;
@@ -288,6 +240,11 @@ std::unique_ptr<Token> Lexer::extractNumber()
     if (this->cur < this->input.length() && this->input[this->cur] == '.') {
         floating = true;
         ++this->cur;
+        for (; this->cur < this->input.length(); ++this->cur) {
+            if (!std::isdigit(this->input[this->cur])) {
+                break;
+            }
+        }
         if (this->cur < this->input.length() && this->input[this->cur] == 'e') {
             ++this->cur;
             if (this->cur < this->input.length() && this->input[this->cur] == '-') {
@@ -341,4 +298,94 @@ std::unique_ptr<Token> Lexer::extractSectionName()
     }
     return std::make_unique<StringToken>(Token::Type::section_name, begin,
                                          std::string{&this->input[begin], this->cur - begin});
+}
+
+std::optional<char> Lexer::extractEscapeCharacter()
+{
+    if (++this->cur >= this->input.length()) {
+        this->diagnostic(this->cur, "missing escaped character");
+        return {};
+    }
+    auto ch = this->input[this->cur];
+    switch (ch) {
+    case 'a':
+        return '\a';
+    case 'b':
+        return '\b';
+    case 'f':
+        return '\f';
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    case 'v':
+        return '\v';
+    case '\\':
+        return '\\';
+    case '\"':
+        return '\"';
+    case '\'':
+        return '\'';
+    case '0':
+        return '\0';
+    case 'x': {
+        if (this->cur + 2 >= this->input.length()) {
+            this->diagnostic(this->input.length(), "missing hex digit");
+            return {};
+        }
+        auto high_4 = parseHex(this->input[++this->cur]);
+        if (high_4 == -1) {
+            this->diagnostic(this->cur, "expect hex digit");
+        }
+        auto low_4 = parseHex(this->input[++this->cur]);
+        if (low_4 == -1) {
+            this->diagnostic(this->cur, "expect hex digit");
+        }
+        return static_cast<char>((high_4 << 4) | low_4);
+    }
+    default:
+        this->diagnostic(this->cur, "unknown escape character");
+        return {};
+    }
+}
+
+std::unique_ptr<Token> Lexer::extractCharacter()
+{
+    const auto begin = this->cur;
+    ASSERT(this->input[this->cur] == '\'', "precondition violation");
+    char ch = this->input[++this->cur];
+    if (ch == '\'') {
+        this->diagnostic(this->cur, "empty character");
+        goto error;
+    }
+    if (ch == '\n') {
+        this->diagnostic(this->cur, "newline character is not allow. try '\\n'?");
+        goto error;
+    }
+    char result;
+    if (ch == '\\') {
+        auto escaped_ch = this->extractEscapeCharacter();
+        if (!escaped_ch) {
+            goto error;
+        }
+        result = *escaped_ch;
+    } else {
+        result = ch;
+    }
+    if (++this->cur >= this->input.length() || this->input[this->cur] != '\'') {
+        this->diagnostic(this->cur, "expect '\\''");
+        goto error;
+    }
+    ++this->cur;
+    return std::make_unique<IntegerToken>(begin + 1, result);
+error:
+    for (; this->cur < this->input.length(); ++this->cur) {
+        if (this->input[this->cur] == '\'') {
+            ++this->cur;
+            break;
+        }
+    }
+    return std::make_unique<IntegerToken>(begin + 1, -1);
 }

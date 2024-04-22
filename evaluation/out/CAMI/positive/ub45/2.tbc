@@ -1,0 +1,106 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_int.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "positive/ub45/2.c"
+            frame_size: 32
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: x
+                        dsg_id: 0
+                        type: i32*
+                        offset: 0
+                    }
+                    {
+                        name: y
+                        dsg_id: 1
+                        type: i32*
+                        offset: 16
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 3
+                    source_location: [
+                        (8, 21)
+                        (8, 25)
+                        (8, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        []
+                        [0, 1]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (9, 10)
+                        (9, 9)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (10, 10)
+                        (10, 9)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    push <i32; 1>
+                    new i32
+                    dsg 0
+                    mdfi
+                    push <i32; 1>
+                    new i32
+                    dsg 1
+                    mdfi
+                    fe 0
+                    dsg 0
+                    read 0
+                    dsg 1
+                    read 1
+                    sub
+                    cast u64
+                    dsg print_int
+                    addr
+                    call 2
+                    fe 1
+                    dsg 0
+                    read 0
+                    del 1
+                    fe 2
+                    dsg 1
+                    read 0
+                    del 1
+                    fe 3
+                    push <i32; 0>
+                    ret
+                .
+        }
+    ]

@@ -21,6 +21,7 @@
 #include <foundation/type/helper.h>
 #include <lib/downcast.h>
 #include <lib/format.h>
+#include <limits>
 
 using namespace cami;
 using namespace tr;
@@ -213,6 +214,7 @@ void Assembler::parseInstr(std::vector<uint8_t>& code_bin,
     code_bin.push_back(-1);
     code_bin.push_back(-1);
     code_bin.push_back(-1);
+    const auto info_offset = this->peek().begin;
     if (instr == "dsg") {
         token = this->nextToken();
         if (token->type == Token::Type::integer) {
@@ -229,12 +231,16 @@ void Assembler::parseInstr(std::vector<uint8_t>& code_bin,
         if (auto type = this->parseTypeSpecifier(); type) {
             this->parsed_types.insert(*type);
             relocate.emplace_back(code_bin.size() - 4, lib::format("#${}", **type));
+        } else {
+            this->diagnostic(info_offset, "invalid type specifier");
         }
     } else if (instr == "push") {
         if (auto constant = this->parseConstant(); constant) {
             this->parsed_constants.insert(*constant);
             relocate.emplace_back(code_bin.size() - 4,
                                   lib::format("<${}; ${}>", *(*constant).first, (*constant).second));
+        } else {
+            this->diagnostic(info_offset, "invalid constant");
         }
     } else if (instr == "j" || instr == "jst" || instr == "jnt") {
         if ((token = this->nextToken())->type != Token::Type::unquote_string) {
@@ -380,6 +386,13 @@ lib::Optional<const ts::Type*> Assembler::parseTypeFunction(const std::vector<co
     if (!ret_type) {
         return {};
     }
+    auto has_void_param = std::any_of(params.begin(), params.end(), [](const Type* p) { return p->kind() == Kind::void_; });
+    if (has_void_param) {
+        if (params.size() > 1) {
+            return {};
+        }
+        return &type_manager.getFunction(**ret_type, {});
+    }
     return &type_manager.getFunction(**ret_type, lib::Array<const Type*>::fromVector(params));
 }
 
@@ -467,22 +480,50 @@ constant_opt_t Assembler::parseConstant()
         auto token = this->nextToken();
         switch ((*type)->kind()) {
         case Kind::f32: {
-            if (token->type != Token::Type::floating) {
-                this->diagnostic(token->begin, "expect floating type");
+            float token_val;
+            if (Token::isString(token)) {
+                auto& str = down_cast<StringToken&>(token).value;
+                if (str == "nan") {
+                    token_val = std::numeric_limits<float>::quiet_NaN();
+                } else if (str == "inf") {
+                    token_val = std::numeric_limits<float>::infinity();
+                } else if (str == "-inf") {
+                    token_val = -std::numeric_limits<float>::infinity();
+                } else {
+                    this->diagnostic(token->begin, "expect 'nan' or 'inf' or '-inf' or floating type");
+                    return 0;
+                }
+            } else if (token->type == Token::Type::floating) {
+                token_val = static_cast<float>(down_cast<FloatingToken&>(token).value);
+            } else {
+                this->diagnostic(token->begin, "expect 'nan' or 'inf' or '-inf' or floating type");
                 return 0;
             }
             uint64_t res = 0;
-            auto token_val = static_cast<float>(down_cast<FloatingToken&>(token).value);
             std::memcpy(&res, &token_val, 4);
             return res;
         }
         case Kind::f64: {
-            if (token->type != Token::Type::floating) {
-                this->diagnostic(token->begin, "expect floating type");
+            double token_val;
+            if (Token::isString(token)) {
+                auto& str = down_cast<StringToken&>(token).value;
+                if (str == "nan") {
+                    token_val = std::numeric_limits<double>::quiet_NaN();
+                } else if (str == "inf") {
+                    token_val = std::numeric_limits<double>::infinity();
+                } else if (str == "-inf") {
+                    token_val = -std::numeric_limits<double>::infinity();
+                } else {
+                    this->diagnostic(token->begin, "expect 'nan' or 'inf' or '-inf' or floating type");
+                    return 0;
+                }
+            } else if (token->type == Token::Type::floating) {
+                token_val = down_cast<FloatingToken&>(token).value;
+            } else {
+                this->diagnostic(token->begin, "expect 'nan' or 'inf' or '-inf' or floating type");
                 return 0;
             }
             uint64_t res;
-            auto token_val = down_cast<FloatingToken&>(token).value;
             std::memcpy(&res, &token_val, 8);
             return res;
         }

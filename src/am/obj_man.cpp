@@ -100,17 +100,22 @@ Object* ObjectManager::newLarge(std::string name, const ts::Type& type, uint64_t
     return obj;
 }
 
-void ObjectManager::cleanup(Object* object)
+void ObjectManager::cleanup(Object* object, InnerID inner_id)
 {
     ASSERT(!object->super_object, "cannot cleanup non-top object");
-    applyRecursively(*object, [](Object& obj) { obj.status = Object::Status::destroyed; });
-    for (Object* item: object->referenced_by) {
-        applyRecursively(*item, [](Object& obj) { obj.status = Object::Status::indeterminate; });
-    }
-    if (auto ref = this->getReferencedObject(object); ref) {
-        [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(object);
-        ASSERT(cnt == 1, "referenced object do not contains referencing object's reference");
-    }
+    applyRecursively(*object, [&](Object& obj) {
+        obj.status = Object::Status::destroyed;
+        for (Object* item: obj.referenced_by) {
+            ASSERT(removeQualify(item->effective_type).kind() == Kind::pointer, "only pointer object can reference another object");
+            item->status = Object::Status::indeterminate;
+            auto& cur_func = this->am.state.current_function();
+            Trace::attachTag(this->am, *item, {cur_func.context, {cur_func.full_expr_exec_cnt, cur_func.cur_full_expr_id, inner_id}});
+        }
+        if (auto ref = this->getReferencedObject(&obj); ref) {
+            [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
+            ASSERT(cnt == 1, "referenced object do not contains referencing object's reference");
+        }
+    });
     [[maybe_unused]] auto cnt = this->am.state.entities.erase(object->address);
     ASSERT(cnt == 1, "global entities do not contains object being cleanup");
 }
@@ -343,45 +348,24 @@ bool ObjectManager::isMarked(Object* object)
     return true;
 }
 
-bool ObjectManager::belongToEden(Object* obj)
+bool ObjectManager::belongTo(uintptr_t addr, const Page& page) noexcept
 {
-    return ObjectManager::belongTo(obj, this->eden);
-}
-
-bool ObjectManager::belongToSurvivor(Object* obj)
-{
-    return ObjectManager::belongTo(obj, this->currentSurvivor());
-}
-
-bool ObjectManager::belongToOldGeneration(Object* obj)
-{
-    return ObjectManager::belongTo(obj, this->old_generation);
-}
-
-bool ObjectManager::belongToPermanent(Object* obj)
-{
-    return ObjectManager::belongTo(obj, this->permanent);
-}
-
-bool ObjectManager::belongTo(Object* obj, Page& page)
-{
-    return obj >= page.data() && obj < page.data() + page.max_size;
+    auto page_addr = reinterpret_cast<uintptr_t>(page.data());
+    auto page_end = reinterpret_cast<uintptr_t>(page.data() + page.usage);
+    return addr >= page_addr && addr < page_end && (addr - page_addr) % sizeof(Object) == 0;
 }
 
 lib::Optional<Object*> ObjectManager::getReferencedObject(const Object* obj) const
 {
     auto& type = removeQualify(obj->effective_type);
-    if (type.kind() != Kind::pointer){
+    if (type.kind() != Kind::pointer) {
         return {};
     }
     if (obj->isIndeterminateRepresentation()) {
         return {};
     }
-    const auto isObject = [&](Entity* ent) {
-        return ent->effective_type.kind() != Kind::function;
-    };
-    if (auto ptr = reinterpret_cast<Entity*>(this->am.memory.read64(obj->address)); ptr && isObject(ptr)) {
-        return down_cast<Object*>(ptr);
+    if (auto ptr = this->am.memory.read64(obj->address); ObjectManager::isValidObjectAddress(ptr)) {
+        return reinterpret_cast<Object*>(ptr);
     }
     return {};
 }
@@ -575,7 +559,7 @@ void ObjectManager::checkMemoryLeak(Object* object)
     // no need to use `upper_bound`, the whole object family must all leak or all not
     //  i.e. if the top object leak, then all its sub-objects(and sub-sub-objects,
     //  recursively) must leak, and vice versa.
-    if (object->status != Object::Status::destroyed){
+    if (object->status != Object::Status::destroyed) {
         log::unbuffered.wprintln("Memory leak! leaked object(auto cleaned by GC):\n${}", *object);
     }
 }

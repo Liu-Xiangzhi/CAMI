@@ -76,7 +76,7 @@ constexpr inline kind_t correspondingSignedValue(Kind kind)
 constexpr inline kind_t correspondingUnsignedValue(Kind kind)
 {
     ASSERT(kind >= Kind::i8 && kind <= Kind::u64, "invalid param");
-    return static_cast<kind_t>(kind) | 0xf;
+    return static_cast<kind_t>(kind) | 0x8;
 }
 
 constexpr inline Kind correspondingSignedKind(Kind kind)
@@ -87,6 +87,12 @@ constexpr inline Kind correspondingSignedKind(Kind kind)
 constexpr inline Kind correspondingUnsignedKind(Kind kind)
 {
     return static_cast<Kind>(correspondingUnsignedValue(kind));
+}
+
+constexpr inline bool isSameIntegerWithoutSigness(Kind a, Kind b)
+{
+    ASSERT(isStrictInteger(a) && isStrictInteger(b), "precondition violation");
+    return correspondingUnsignedKind(a) == correspondingUnsignedKind(b);
 }
 
 inline const Type& removeQualify(const Type& type)
@@ -125,6 +131,14 @@ bool isLooserCompatible(const Type& a, const Type& b);
 //  A is qualified or unqualified pointer type and B is qualified or unqualified pointer type
 bool isLoosestCompatible(const Type& a, const Type& b);
 
+inline bool isAllowed(const Type& lvalue_type, const Type& object_type)
+{
+    if (isCCharacter(removeQualify(lvalue_type).kind())) {
+        return object_type.kind() != Kind::function;
+    }
+    return isLooserCompatible(lvalue_type, object_type);
+}
+
 inline uint64_t getMaxSignedValue(Kind kind)
 {
     ASSERT(kind >= Kind::i8 && kind <= Kind::i64, "precondition violation");
@@ -153,6 +167,7 @@ inline int64_t getMinValue(Kind kind)
     auto max_sign_val = getMaxSignedValue(kind);
     return isSigned(kind) ? -*reinterpret_cast<int64_t*>(&max_sign_val) - 1 : 0;
 }
+
 // count the number of instances of all objects generated when object `O` is created as type `type`
 //   (i.e. 1(object `O`) + number of sub object `O` + number of sub object of all sub object of `O` + ..., recursively)
 uint64_t countCorrespondingObjectFamily(const Type& type);

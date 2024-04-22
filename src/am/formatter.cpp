@@ -60,6 +60,8 @@ std::string Formatter::formatType(const ts::Type& type) // NOLINT
         return "null"s;
     case Kind::pointer:
         return Formatter::formatType(down_cast<const Pointer&>(type).referenced).append("*");
+    case Kind::dissociative_pointer:
+        return "dissociative pointer"s;
     case Kind::array: {
         auto& array = down_cast<const Array&>(type);
         return lib::format("${}[${}]", array.element, array.len);
@@ -104,6 +106,8 @@ std::string Formatter::formatType(const ts::Type& type) // NOLINT
         }
         return result;
     }
+    case Kind::ivd:
+        return "<invalid>"s;
     default:
         return "?type?"s;
     }
@@ -112,18 +116,53 @@ std::string Formatter::formatType(const ts::Type& type) // NOLINT
 std::string Formatter::opcode(Opcode opcode)
 {
     static const std::map<Opcode, std::string_view> map{
-            {Opcode::dsg,   "dsg"sv}, {Opcode::drf, "drf"sv}, {Opcode::read, "read"sv}, {Opcode::mdf, "mdf"sv},
-            {Opcode::zero,  "zero"sv}, {Opcode::mdfi, "mdfi"sv}, {Opcode::zeroi, "zeroi"sv},
-            {Opcode::eb,    "eb"sv}, {Opcode::lb, "lb"sv}, {Opcode::new_, "new"sv}, {Opcode::del, "del"sv},
-            {Opcode::fe,    "fe"sv}, {Opcode::j, "j"sv}, {Opcode::jst, "jst"sv}, {Opcode::jnt, "jnt"sv},
-            {Opcode::call,  "call"sv}, {Opcode::ij, "ij"sv}, {Opcode::ret, "ret"sv}, {Opcode::nop, "nop"sv},
-            {Opcode::pushu, "pushu"sv}, {Opcode::push, "push"sv}, {Opcode::pop, "pop"sv}, {Opcode::dup, "dup"sv},
-            {Opcode::halt,  "halt"sv}, {Opcode::dot, "dot"sv}, {Opcode::arrow, "arrow"sv}, {Opcode::addr, "addr"sv},
-            {Opcode::cast,  "cast"sv}, {Opcode::cpl, "cpl"sv}, {Opcode::pos, "pos"sv}, {Opcode::neg, "neg"sv},
-            {Opcode::not_,  "not"sv}, {Opcode::mul, "mul"sv}, {Opcode::div, "div"sv}, {Opcode::mod, "mod"sv},
-            {Opcode::add,   "add"sv}, {Opcode::sub, "sub"sv}, {Opcode::ls, "ls"sv}, {Opcode::rs, "rs"sv},
-            {Opcode::sl,    "sl"sv}, {Opcode::sle, "sle"sv}, {Opcode::sg, "sg"sv}, {Opcode::sge, "sge"sv},
-            {Opcode::seq,   "seq"sv}, {Opcode::sne, "sne"sv}, {Opcode::and_, "and"sv}, {Opcode::or_, "or"sv},
+            {Opcode::dsg,   "dsg"sv},
+            {Opcode::drf,   "drf"sv},
+            {Opcode::read,  "read"sv},
+            {Opcode::mdf,   "mdf"sv},
+            {Opcode::zero,  "zero"sv},
+            {Opcode::mdfi,  "mdfi"sv},
+            {Opcode::zeroi, "zeroi"sv},
+            {Opcode::eb,    "eb"sv},
+            {Opcode::lb,    "lb"sv},
+            {Opcode::new_,  "new"sv},
+            {Opcode::del,   "del"sv},
+            {Opcode::fe,    "fe"sv},
+            {Opcode::j,     "j"sv},
+            {Opcode::jst,   "jst"sv},
+            {Opcode::jnt,   "jnt"sv},
+            {Opcode::call,  "call"sv},
+            {Opcode::ij,    "ij"sv},
+            {Opcode::ret,   "ret"sv},
+            {Opcode::nop,   "nop"sv},
+            {Opcode::pushu, "pushu"sv},
+            {Opcode::push,  "push"sv},
+            {Opcode::pop,   "pop"sv},
+            {Opcode::dup,   "dup"sv},
+            {Opcode::halt,  "halt"sv},
+            {Opcode::dot,   "dot"sv},
+            {Opcode::arrow, "arrow"sv},
+            {Opcode::addr,  "addr"sv},
+            {Opcode::cast,  "cast"sv},
+            {Opcode::cpl,   "cpl"sv},
+            {Opcode::pos,   "pos"sv},
+            {Opcode::neg,   "neg"sv},
+            {Opcode::not_,  "not"sv},
+            {Opcode::mul,   "mul"sv},
+            {Opcode::div,   "div"sv},
+            {Opcode::mod,   "mod"sv},
+            {Opcode::add,   "add"sv},
+            {Opcode::sub,   "sub"sv},
+            {Opcode::ls,    "ls"sv},
+            {Opcode::rs,    "rs"sv},
+            {Opcode::sl,    "sl"sv},
+            {Opcode::sle,   "sle"sv},
+            {Opcode::sg,    "sg"sv},
+            {Opcode::sge,   "sge"sv},
+            {Opcode::seq,   "seq"sv},
+            {Opcode::sne,   "sne"sv},
+            {Opcode::and_,  "and"sv},
+            {Opcode::or_,   "or"sv},
             {Opcode::xor_,  "xor"sv},
     };
     if (auto itr = map.find(opcode); itr != map.end()) {
@@ -169,7 +208,7 @@ std::string Formatter::pointerValue(const PointerValue& value)
 
 std::string Formatter::structOrUnionValue(const StructOrUnionValue& value)
 {
-    return lib::format("${}{address: ${}}", value.getType(), value.address);
+    return lib::format("${}{object: ${brief}}", value.getType(), *value.obj);
 }
 
 std::string Formatter::nullValue()
@@ -182,6 +221,11 @@ std::string Formatter::undefinedValue()
     return "undefined_value"s;
 }
 
+std::string Formatter::dissociativePointerValue(const DissociativePointerValue& value)
+{
+    return lib::format("dissociative_pointer_value{type: ${}, address: ${x}}", *value.pointer_type, value.address);
+}
+
 std::string Formatter::valueBox(const ValueBox& vb, std::string_view specifier)
 {
     switch (vb->getType().kind()) {
@@ -191,6 +235,8 @@ std::string Formatter::valueBox(const ValueBox& vb, std::string_view specifier)
         return Formatter::f64Value(vb.get<F64Value>());
     case Kind::pointer:
         return Formatter::pointerValue(vb.get<PointerValue>());
+    case Kind::dissociative_pointer:
+        return Formatter::dissociativePointerValue(vb.get<DissociativePointerValue>());
     case Kind::struct_:
     case Kind::union_:
         return Formatter::structOrUnionValue(vb.get<StructOrUnionValue>());
@@ -241,7 +287,7 @@ std::string Formatter::object(const Object& obj, bool full) // NOLINT
     auto idt = std::string(this->indent + 1, '\t');
     std::string result;
     result.append(this->indent, '\t').append("object{\n")
-            .append(lib::format("${}name: ${x}\n", idt, obj.name));
+            .append(lib::format("${}name: ${x}\n", idt, Formatter::objectName(obj)));
     this->formatObjectStandardInfo(result, obj);
     if (full) {
         this->formatObjectDetailInfo(result, obj);
@@ -318,18 +364,20 @@ std::string Formatter::tag(const Object::Tag& tag) const
     std::string result;
     auto& functions = this->am->static_info.functions;
     auto ctx = &tag.context;
-    auto func = &functions[ctx->func_id];
-    auto [ln, cl] = func->full_expr_infos[tag.access_point.full_expr_id].source_location[tag.access_point.inner_id.value()];
+    auto ctx_func = &functions[ctx->func_id];
+    auto [ln, cl] = ctx_func->full_expr_infos[tag.access_point.full_expr_id].source_location[tag.access_point.inner_id.value()];
     result.append(lib::format("${}accessed at source file '${}' line ${} colum ${}. backtrace:\n",
-                              idt, func->file_name, ln, cl));
+                              idt, ctx_func->file_name, ln, cl));
     while (!ctx->caller.isDummy()) {
-        func = &functions[ctx->func_id];
-        auto [line, colum] = func->full_expr_infos[ctx->call_point.full_expr_id].source_location[ctx->call_point.inner_id.value()];
-        result.append(lib::format("${}${} called at '${}' line ${} colum ${}.\n",
-                                  idt, func->name, func->file_name, line, colum));
+        ctx_func = &functions[ctx->func_id];
+        auto caller_func = &functions[ctx->caller.func_id];
+        auto [line, colum] = caller_func->full_expr_infos[ctx->call_point.full_expr_id].source_location[ctx->call_point.inner_id.value()];
+        result.append(lib::format("${}\t'${}' called at \"${}\" line ${} colum ${}.\n",
+                                  idt, ctx_func->name, ctx_func->file_name, line, colum));
         ctx = &ctx->caller;
     }
-    result.append(lib::format("${}${} at '${}'.", idt, func->name, func->file_name));
+    ctx_func = &functions[ctx->func_id];
+    result.append(lib::format("${}\t'${}' at \"${}\".", idt, ctx_func->name, ctx_func->file_name));
     return result;
 }
 
@@ -419,6 +467,11 @@ std::string ToString<F64Value>::invoke(const F64Value& arg, [[maybe_unused]] std
 std::string ToString<PointerValue>::invoke(const PointerValue& arg, [[maybe_unused]] std::string_view specifier)
 {
     return Formatter::pointerValue(arg);
+}
+
+std::string ToString<DissociativePointerValue>::invoke(const DissociativePointerValue& value, [[maybe_unused]] std::string_view specifier)
+{
+    return Formatter::dissociativePointerValue(value);
 }
 
 std::string ToString<StructOrUnionValue>::invoke(const StructOrUnionValue& arg,

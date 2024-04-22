@@ -24,42 +24,49 @@ uint64_t SimpleAllocator::alloc(uint64_t size, uint64_t align)
     uint64_t addr = layout::HEAP_BASE;
     uint64_t len;
     uint64_t alloc_len;
+    if (size >= layout::HEAP_BOUNDARY - layout::HEAP_BASE) [[unlikely]] {
+        return -1;
+    }
     do {
         addr = this->findNextAvailable(addr);
         if (addr == -1) {
             return -1;
         }
         len = this->memory.read64(addr);
-        alloc_len = 16 + lib::roundUp(size, 2) + lib::roundUp(addr + 8, align);
+        auto aligned_size = size + lib::roundUpPadding(addr + 8, align);
+        auto tail_cookie_addr = lib::roundUp(addr + 8 + aligned_size, 8);
+        alloc_len = tail_cookie_addr + 8 - addr;
     } while (alloc_len > len);
-    if (alloc_len < len - 16) {
+    if (len - alloc_len > 16) [[likely]] {
         this->memory.write64(addr, alloc_len | 1);
         this->memory.write64(addr + alloc_len - 8, alloc_len | 1);
         this->memory.write64(addr + alloc_len, len - alloc_len);
         this->memory.write64(addr + len - 8, len - alloc_len);
     } else {
+        // len - alloc_len <= 16, alloc all free memory
         this->memory.write64(addr, len | 1);
         this->memory.write64(addr + len - 8, len | 1);
     }
     auto alloc_addr = lib::roundUp(addr + 8, align);
-    for (auto i = addr + 8; i < alloc_addr; ++i) {
-        this->memory.write8(i, 0);
+    for (uint64_t i = addr + 8; i < alloc_addr; i += 8) {
+        this->memory.write64(i, 0); // indicate leading padding of allocated address
     }
     return alloc_addr;
 }
 
 void SimpleAllocator::dealloc(uint64_t addr, [[maybe_unused]] uint64_t size)
 {
+    ASSERT(addr % 8 == 0, "invalid address");
     const auto hasPrevChunk = [](uint64_t addr) {
         return addr > layout::HEAP_BASE;
     };
     const auto hasNextChunk = [](uint64_t addr, uint64_t len) {
         return addr + len < layout::HEAP_BOUNDARY;
     };
-    while (this->memory.read8(addr) == 0) {
-        --addr;
-    }
-    auto chunk_addr = addr - 7;
+    auto chunk_addr = [this](uint64_t alloc_addr) {
+        for (alloc_addr -= 8; this->memory.read64(alloc_addr) == 0; alloc_addr -= 8) {}
+        return alloc_addr;
+    }(addr);
     auto chunk_len = this->memory.read64(chunk_addr) - 1;
     if (hasPrevChunk(chunk_addr)) {
         auto prev_chunk_len_with_flag = this->memory.read64(chunk_addr - 8);

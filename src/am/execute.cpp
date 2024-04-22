@@ -48,6 +48,10 @@ void Execute::designate(AbstractMachine& am, InstrInfo info)
 void Execute::dereference(AbstractMachine& am)
 {
     auto pointer = am.operand_stack.popDeterminateValue();
+    if (pointer->getType().kind() == Kind::dissociative_pointer) {
+        throw UBException{{UB::eva_ivd_lvalue}, lib::format(
+                "dereference dissociative pointer, value: `${x}`", pointer.get<DissociativePointerValue>().address)};
+    }
     CHECK_TYPE(pointer->getType().kind() == Kind::pointer);
     auto ent = pointer.get<PointerValue>().getReferenced();
     if (!ent) {
@@ -73,7 +77,7 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
 {
     CHECK_DESIGNATION_REGISTER();
     auto& lvalue_type = *am.dsg_reg.lvalue_type;
-    if (!isCompatible(am.dsg_reg.entity->effective_type, lvalue_type) && !isCCharacter(lvalue_type.kind())) {
+    if (!isAllowed(lvalue_type, am.dsg_reg.entity->effective_type)) {
         throw UBException{{UB::incompatible_read}, lib::format(
                 "entity '${}' is read by incompatible type `${}`", *am.dsg_reg.entity, lvalue_type)};
     }
@@ -97,7 +101,7 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
             if (lvalue_type.kind() != Kind::qualify
                 || !(down_cast<const Qualify&>(lvalue_type).qualifier & Qualifier::volatile_)) {
                 throw UBException{{UB::ivd_read_volatile_obj}, lib::format(
-                        "object '${name}' is read by an lvalue of non-volatile type ${}", obj, lvalue_type)};
+                        "volatile object '${name}' is read by an lvalue of non-volatile type ${}", obj, lvalue_type)};
             }
         }
     }
@@ -178,17 +182,21 @@ void Execute::do_read(am::AbstractMachine& am)
             return new F64Value{val};
         }
         case Kind::pointer: {
-            auto ptr = reinterpret_cast<Entity*>(am.memory.read64(obj.address));
-            auto offset = am.memory.read64(obj.address + 8);
-            return new PointerValue{&lvalue_type, ptr, offset};
+            auto addr = am.memory.read64(obj.address);
+            if (am.isValidEntityAddress(addr)) {
+                auto ptr = reinterpret_cast<Entity*>(addr);
+                auto offset = am.memory.read64(obj.address + 8);
+                return new PointerValue{&lvalue_type, ptr, offset};
+            }
+            return new DissociativePointerValue{&lvalue_type, addr};
         }
         case Kind::struct_:
         case Kind::union_:
-            return new StructOrUnionValue{&lvalue_type, obj.address};
+            return new StructOrUnionValue{&lvalue_type, &obj};
         default:
             ASSERT(isInteger(lvalue_type.kind()), "no other type kind could occur");
             uint64_t val = 0;
-            am.memory.read(reinterpret_cast<uint8_t*>(&val), obj.address, lvalue_type.size());
+            am.memory.read(reinterpret_cast<uint8_t*>(&val), obj.address + am.dsg_reg.offset, lvalue_type.size());
 #ifdef CAMI_TARGET_INFO_BIG_ENDIAN
             val >>= 64 - 8 * lvalue_type.size();
 #endif
@@ -208,15 +216,17 @@ void Execute::do_modify(am::AbstractMachine& am, ValueBox vb) // NOLINT
         uint32_t val;
         std::memcpy(&val, &tmp, 4);
         am.memory.write32(obj.address, val);
+        obj.status = Object::Status::well;
     }
-        goto update_scalar_obj_status;
+        break;
     case Kind::f64: {
         auto tmp = vb.get<F64Value>().f64();
         uint64_t val;
         std::memcpy(&val, &tmp, 8);
         am.memory.write64(obj.address, val);
+        obj.status = Object::Status::well;
     }
-        goto update_scalar_obj_status;
+        break;
     case Kind::pointer: {
         if (auto ref = am.object_manager.getReferencedObject(&obj); ref) {
             [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
@@ -234,27 +244,43 @@ void Execute::do_modify(am::AbstractMachine& am, ValueBox vb) // NOLINT
         auto offset = vb.get<PointerValue>().getOffset();
         am.memory.write64(obj.address, ptr);
         am.memory.write64(obj.address + 8, offset);
+        obj.status = Object::Status::well;
     }
-        goto update_scalar_obj_status;
+        break;
+    case Kind::dissociative_pointer:
+        am.memory.write64(obj.address, vb.get<DissociativePointerValue>().address);
+        am.memory.write64(obj.address + 8, 0);
+        obj.status = Object::Status::well;
+        break;
     case Kind::struct_:
     case Kind::union_: {
-        auto addr = vb.get<StructOrUnionValue>().address;
+        auto& struct_or_union_obj = *vb.get<StructOrUnionValue>().obj;
         auto size = obj.effective_type.size();
         std::unique_ptr<uint8_t[]> buf{new uint8_t[size]};
-        am.memory.read(buf.get(), addr, obj.effective_type.size());
+        am.memory.read(buf.get(), struct_or_union_obj.address, obj.effective_type.size());
         am.memory.write(obj.address, buf.get(), obj.effective_type.size());
-        copyStatus(down_cast<Object&>(*am.state.entities.at(addr)), obj);
+        copyStatus(struct_or_union_obj, obj);
     }
-        goto end;
+        break;
     default:
         ASSERT(isInteger(write_value_type.kind()), "no other type kind could occur");
         auto val = vb.get<IntegerValue>().uint64();
+#ifdef CAMI_TARGET_INFO_LITTLE_ENDIAN
         am.memory.write(obj.address + am.dsg_reg.offset, reinterpret_cast<uint8_t*>(&val), write_value_type.size());
-        goto update_scalar_obj_status;
+#else
+        am.memory.write(obj.address + am.dsg_reg.offset, reinterpret_cast<uint8_t*>(&val) + (8 - write_value_type.size()),
+                        write_value_type.size());
+#endif
+        obj.status = Object::Status::well;
+        if (isCCharacter(write_value_type.kind())) {
+            Execute::checkObjectRepresentation(am, obj);
+        }
     }
-update_scalar_obj_status:
-    obj.status = Object::Status::well;
-end:;
+}
+
+void Execute::checkObjectRepresentation(AbstractMachine& am, Object& obj)
+{
+    // no non_value_representation is defined now... so do nothing
 }
 
 void Execute::enterBlock(AbstractMachine& am, InstrInfo info)
@@ -272,7 +298,7 @@ void Execute::do_enterBlock(AbstractMachine& am, uint32_t block_id)
         CHECK_ID(object, item.id, current_func.automatic_objects.length());
         auto obj = am.object_manager.new_(item.name, item.type, am.state.frame_pointer + item.offset);
         if (item.init_data) {
-            obj->status = Object::Status::well;
+            applyRecursively(*obj, [](auto& o) { o.status = Object::Status::well; });
             am.memory.write(am.state.frame_pointer + item.offset, item.init_data.get(), item.type.size());
         }
         current_func.automatic_objects[item.id] = obj;
@@ -287,10 +313,13 @@ void Execute::leaveBlock(AbstractMachine& am)
                        "Instruction `lb` is executed while there's no block in current function");
     auto block_id = current_func.blocks.top();
     current_func.blocks.pop();
+    // leave block is implicitly treated as a full expression, because it destroys automatic object(s),
+    //      which may indeterminate pointer object(s)
+    current_func.full_expr_exec_cnt++;
     for (const auto& item: static_info->blocks[block_id].obj_desc) {
         CHECK_ID(object, item.id, current_func.automatic_objects.length());
         auto obj = current_func.automatic_objects[item.id];
-        am.object_manager.cleanup(obj);
+        am.object_manager.cleanup(obj, InnerID::newMutualExclude(0));
         current_func.automatic_objects[item.id] = nullptr;
     }
 }
@@ -310,7 +339,7 @@ void Execute::newObject(AbstractMachine& am, InstrInfo info)
     }
     auto obj = am.object_manager.new_("<heap>#"s + std::to_string(cnt++), type_manager.getArray(*type, num),
                                       am.heap_allocator->alloc(type->size() * num, type->align()));
-    am.operand_stack.push(ValueBox{new PointerValue{type, obj->sub_objects[0], 0}});
+    am.operand_stack.push(ValueBox{new PointerValue{&type_manager.getPointer(*type), obj->sub_objects[0], 0}});
 }
 
 void Execute::deleteObject(AbstractMachine& am, InstrInfo info)
@@ -335,8 +364,9 @@ void Execute::deleteObject(AbstractMachine& am, InstrInfo info)
         throw ConstraintViolationException{
                 lib::format("delete non-allocated storage object `${name}`\n${}", **ent, **ent)};
     }
-    Execute::attachTag(am, obj, InnerID::newMutualExclude(info.getInnerID()));
-    am.object_manager.cleanup(&obj);
+    auto inner_id = InnerID::newMutualExclude(info.getInnerID());
+    Execute::attachTag(am, obj, inner_id);
+    am.object_manager.cleanup(&obj, inner_id);
     am.heap_allocator->dealloc(obj.address, obj.effective_type.size());
 }
 
@@ -375,6 +405,10 @@ void Execute::jumpIfNotSet(AbstractMachine& am, InstrInfo info)
 void Execute::call(AbstractMachine& am, InstrInfo info)
 {
     auto func_ptr = am.operand_stack.popDeterminateValue();
+    if (func_ptr->getType().kind() == Kind::dissociative_pointer) {
+        throw UBException{{UB::incompatible_func_call, UB::eva_ivd_lvalue}, lib::format(
+                "try to call dissociative pointer, value: ${}", func_ptr.get<DissociativePointerValue>().address)};
+    }
     CHECK_TYPE(func_ptr->getType().kind() == Kind::pointer);
     auto entity = func_ptr.get<PointerValue>().getReferenced();
     if (!entity) {
@@ -563,14 +597,15 @@ void Execute::modifyCheck(am::AbstractMachine& am, bool ignore_const)
     if (removeQualify(obj.effective_type).kind() == Kind::array) {
         throw ConstraintViolationException{lib::format("Modify array object `${name}`", obj)};
     }
-    auto& write_value_type = rv.vb->getType();
-    if (!isCompatible(obj.effective_type, write_value_type) && !isCCharacter(write_value_type.kind())) {
+    auto& write_value_type =
+            rv.vb->getType().kind() == Kind::dissociative_pointer ? *rv.vb.get<DissociativePointerValue>().pointer_type : rv.vb->getType();
+    if (!isAllowed(write_value_type, obj.effective_type)) {
         throw ConstraintViolationException{lib::format(
                 "object '${}' is modified by incompatible type `${}`", obj, write_value_type)};
     }
     if (am.dsg_reg.offset > 0 && !isCCharacter(write_value_type.kind())) {
         throw ConstraintViolationException{
-                lib::format("entity '${}' is write with nonzero offset", *am.dsg_reg.entity)};
+                lib::format("entity '${}' is write with non-character lvalue type and nonzero offset", *am.dsg_reg.entity)};
     }
 }
 

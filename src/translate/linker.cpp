@@ -223,7 +223,7 @@ void insertBootFunction(UnlinkedMBC& unlinked_mbc)
     func->name = "__boot__";
     func->file_name = "<no file>";
     auto& void_ = ts::type_manager.getBasicType(ts::Kind::void_);
-    func->effective_type = &ts::type_manager.getFunction(void_, {&void_});
+    func->effective_type = &ts::type_manager.getFunction(void_, {});
     func->frame_size = 0;
     func->max_object_num = 0;
     func->blocks.emplace_back();
@@ -490,8 +490,8 @@ auto makeObjects(UnlinkedMBC& unlinked_mbc, const ObjectLayout& object_layout)
         }
     }
     lib::Array<uint8_t> data(non_bss_data_len);
-    std::memset(data.data(), 0, addr);
-    for (int i = 0; i < object_layout.bss_begin; ++i) {
+    std::memset(data.data(), 0, non_bss_data_len);
+    for (uint64_t i = 0; i < object_layout.bss_begin; ++i) {
         std::memcpy(&data[static_objects[i].address], unlinked_mbc.objects[i]->value.data(),
                     static_objects[i].type->size());
     }
@@ -505,7 +505,7 @@ std::unique_ptr<LinkedMBC> makeLinkedMBC(std::unique_ptr<UnlinkedMBC> unlinked_m
     auto types = lib::Array<const ts::Type*>::fromVector(unlinked_mbc->types);
     auto constants = makeConstants(unlinked_mbc->constants);
     auto [functions, code] = makeFunctions(*unlinked_mbc);
-    auto [static_objects, data, data_relocate, string_literal_end, bss_size] = makeObjects(*unlinked_mbc, object_layout);
+    auto [static_objects, data, data_relocate, string_literal_len, bss_size] = makeObjects(*unlinked_mbc, object_layout);
     unlinked_mbc->attribute.type = option.type;
     if (option.type == MBC::Type::executable) {
         auto itr = std::find_if(functions.begin(), functions.end(), [&](const Function& func) {
@@ -516,7 +516,7 @@ std::unique_ptr<LinkedMBC> makeLinkedMBC(std::unique_ptr<UnlinkedMBC> unlinked_m
     }
     return std::make_unique<LinkedMBC>(std::move(unlinked_mbc->source_name), std::move(unlinked_mbc->attribute),
                                        std::move(unlinked_mbc->comment), std::move(code), std::move(data),
-                                       string_literal_end, bss_size, std::move(static_objects), std::move(constants),
+                                       string_literal_len, bss_size, std::move(static_objects), std::move(constants),
                                        std::move(types), std::move(functions), std::move(data_relocate));
 }
 } // anonymous namespace

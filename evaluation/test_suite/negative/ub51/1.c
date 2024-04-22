@@ -23,9 +23,8 @@ int main()
     for (int i = 0; i < 10; i++){
         a.a1.y.x[i] = i;
     }
-    for (int i = 0; i < 10; i++){
+    for (int i = 9; i >= 0; i--) {
         a.a2.y.x[i] = a.a1.y.x[i];
     }
-    a.a2.y = a.a1.y;
     printf("%d\n", a.a2.y.x[2]);
 }

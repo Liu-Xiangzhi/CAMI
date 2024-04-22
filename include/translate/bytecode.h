@@ -117,7 +117,9 @@ using std::operator ""sv;
  * instr ::= unquote_string
  * info ::= type_specifier | constant | integer |
  *          unquote_string
- * constant ::= '&lt;' type_specifier [';' number] '>'
+ * constant ::= '&lt;' type_specifier ';' constant_value '>'
+ * constant_value ::= number | 'nan' | 'inf' | '-inf' |
+ *                    'null'
  * @endcode
  *
  * @lexical
@@ -126,7 +128,7 @@ using std::operator ""sv;
  * boolean ::= 'true' | 'false'
  * hex_sequence ::= '0xs' hex_pair {hex_pair}
  * string ::= unquote_string | quote_string
- * integer ::= dec_integer | dec_float
+ * integer ::= dec_integer | hex_integer | char
  * floating ::= dec_integer '.' dec_digits
  *               ['e' ['-'] dec_integer]
  * section_name ::= '.' ('.' | '_' | alpha)
@@ -142,6 +144,7 @@ using std::operator ""sv;
  *           'W' | 'X' | 'Y' | 'Z'
  * dec_integer ::= ['-'] dec_digits
  * hex_integer ::= '0x' hex_digits
+ * char ::= '\'' full_char_without_newline '\''
  * hex_pair ::= hex_digit hex_digit
  * dec_digits ::= dec_digit {dec_digit}
  * hex_digits ::= hex_digit {hex_digit}
@@ -156,9 +159,11 @@ using std::operator ""sv;
  *                       '^' | '&' | '_' | '/' | '+' | '=' |
  *                       '|' | ''' | '?' | alpha
  * normal_char ::= normal_char_begin | dec_digit | '-'
- * full_char ::= normal_char | escape_char | SPACE_CHARS |
+ * full_char_without_newline ::=
+ *               normal_char | escape_char | SPACE_CHARS |
  *               ',' | ':' | '.' | '[' | '{' | ']' | '}' |
  *               ';' | '*' | '&lt;' | '>' | '#' | '(' | ')'
+ * full_char ::= full_char_without_newline | NEWLINE
  * escape_char ::= '\a' | '\b' | '\f' | '\n' | '\r' |
  *                 '\t' | '\v' | '\\' | '\"' | '\'' |
  *                 '\0' | '\x' hex_digit hex_digit

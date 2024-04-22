@@ -112,7 +112,7 @@ public:
         }
         this->full_description.append("\nrelated UB(s):\n");
         for (auto item: this->ubs) {
-            this->full_description.append(lib::format("${}\n", item));
+            this->full_description.append(lib::format("\t${}\n", item));
         }
         this->full_description.pop_back(); // remove last newline character
     }

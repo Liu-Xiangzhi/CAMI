@@ -57,7 +57,7 @@ enum class UB
     ivd_modify_restrict_obj [[maybe_unused]] = 65,
     ivd_restrict_ptr_assign [[maybe_unused]] = 66,
     nonpositive_len_of_vla [[maybe_unused]] = 72,
-    return_undefined = 86,
+    return_undefined = 85,
 };
 extern const char* const ub_descriptions[218];
 } // namespace cami::am

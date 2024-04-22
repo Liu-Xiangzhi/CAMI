@@ -86,11 +86,14 @@ bool am::checkStatusForRead(Object& object) // NOLINT
 
 static void do_updateCommonInitialSequenceStatus(Object& cur_obj, Object& modified) // NOLINT
 {
-    if (isCompatible(cur_obj.effective_type, modified.effective_type)) {
-        copyStatus(modified, cur_obj);
+    auto& cur_obj_type = removeQualify(cur_obj.effective_type);
+    if (isScalar(cur_obj_type.kind())) {
+        if (isCompatible(cur_obj_type, modified.effective_type)) {
+            copyStatus(modified, cur_obj);
+        }
         return;
     }
-    if (removeQualify(cur_obj.effective_type).kind() == Kind::struct_) {
+    if (cur_obj_type.kind() == Kind::array || cur_obj_type.kind() == Kind::struct_) {
         if (cur_obj.sub_objects.length() > 0) {
             do_updateCommonInitialSequenceStatus(*cur_obj.sub_objects[0], modified);
         }

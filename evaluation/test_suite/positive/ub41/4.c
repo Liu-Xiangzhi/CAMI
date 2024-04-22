@@ -9,5 +9,5 @@ void f(int c, int x, int y)
 
 int main()
 {
-    f(1, 0 , 1);
+    f(0, 0 , 1);
 }

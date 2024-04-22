@@ -3,7 +3,7 @@
 
 int main()
 {
-    double x = (double)(FLT_MAX) + 1;
+    double x = DBL_MAX;
     float y = (float)x;
     printf("%f\n", (double)y);
 }

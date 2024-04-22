@@ -183,8 +183,10 @@ private:
 
     std::unique_ptr<Token> extractSectionName();
     std::unique_ptr<Token> extractQuotedString();
+    std::optional<char> extractEscapeCharacter();
     std::string extractUnquotedString();
     std::unique_ptr<Token> extractHexSequence();
+    std::unique_ptr<Token> extractCharacter();
     std::unique_ptr<Token> extractNumber();
 };
 
@@ -194,6 +196,7 @@ class Assembler
     UnlinkedMBC* mbc = nullptr;
     std::deque<std::unique_ptr<Token>> token_buffer;
     bool has_error = false;
+    bool has_attribute = false;
     std::set<const ts::Type*> parsed_types;
     std::set<std::pair<const ts::Type*, uint64_t>> parsed_constants;
 public:
@@ -249,6 +252,7 @@ private:
         this->lexer.reset(tbc, name);
         this->token_buffer.clear();
         this->has_error = false;
+        this->has_attribute = false;
         this->parsed_types.clear();
         this->parsed_constants.clear();
     }

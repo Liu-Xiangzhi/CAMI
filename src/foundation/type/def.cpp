@@ -114,7 +114,7 @@ size_t Struct::size() const noexcept
 
 size_t Struct::align() const noexcept
 {
-    size_t max;
+    size_t max = 1;
     for (const Type* item: this->members) {
         auto align = item->align();
         if (align > max) {
@@ -126,7 +126,7 @@ size_t Struct::align() const noexcept
 
 size_t Union::size() const noexcept
 {
-    size_t max;
+    size_t max = 0;
     for (const Type* item: this->members) {
         auto sz = item->size();
         if (sz > max) {
@@ -138,7 +138,7 @@ size_t Union::size() const noexcept
 
 size_t Union::align() const noexcept
 {
-    size_t max;
+    size_t max = 1;
     for (const Type* item: this->members) {
         auto align = item->align();
         if (align > max) {

@@ -58,10 +58,10 @@ private:
     static void basicModifyCheck(AbstractMachine& am, bool ignore_const);
     static void do_read(AbstractMachine& am);
     static void do_modify(AbstractMachine& am, ValueBox vb);
+    static void checkObjectRepresentation(AbstractMachine& am, Object& obj);
     static void accessMember(AbstractMachine& am, const Entity* entity, const ts::Type* lvalue_type, uint32_t member_id);
     static void do_enterBlock(AbstractMachine& am, uint32_t block_id);
     static void checkJumpAddr(AbstractMachine& am, uint64_t target_pc);
-    static void castPointerToInteger(cami::ValueBox& operand, const ts::Type& type);
     static void castIntegerToPointer(AbstractMachine& am, ValueBox& operand, const ts::Type& type);
     static void castPointerToPointer(ValueBox& operand, const ts::Type& type);
 

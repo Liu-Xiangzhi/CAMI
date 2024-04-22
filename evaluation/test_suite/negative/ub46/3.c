@@ -3,7 +3,7 @@ static void f(int*);
 
 static void f(int* x)
 {
-    printf("%d\n", (*(int (*)[2])&x[2])[1]);
+    printf("%d\n", (*(int (*)[2])(x + 2))[1]);
 }
 
 int main()

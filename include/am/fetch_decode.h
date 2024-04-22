@@ -93,15 +93,6 @@ public:
         }
     };
 
-    struct InnerID
-    {
-        static bool isCoexisting(uint32_t id)
-        {
-            return id & 1;
-        }
-
-    };
-
     [[nodiscard]] IdentifierId getIdentifierID() const noexcept
     {
         return IdentifierId{this->id};

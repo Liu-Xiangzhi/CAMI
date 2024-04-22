@@ -7,7 +7,9 @@ struct A
     float y;
 };
 
-static void f(int* x, int* y)
+static void f(int*, int*);
+
+void f(int* x, int* y)
 {
     printf("%d\n", x >= y);
 }

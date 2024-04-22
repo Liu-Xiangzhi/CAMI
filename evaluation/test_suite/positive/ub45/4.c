@@ -7,7 +7,9 @@ struct A
     float y;
 };
 
-static void f(int* x, int* y)
+static void f(char*, char*);
+
+void f(char* x, char* y)
 {
     printf("%ld\n", x - y);
 }
@@ -15,5 +17,5 @@ static void f(int* x, int* y)
 int main()
 {
     struct A a1 = {.x=0, .y=1}, a2 = {.x=1, .y=2};
-    f(&a1.x, &a2.x);
+    f((char*)&a1.x, (char*)&a2.y);
 }

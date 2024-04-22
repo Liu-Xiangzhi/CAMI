@@ -1,0 +1,105 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_int.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "positive/ub62/3.c"
+            frame_size: 8
+            max_object_num: 1
+            blocks: [
+                [
+                    {
+                        name: x
+                        dsg_id: 0
+                        type: i32 volatile
+                        offset: 0
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    push <i32; 1>
+                    mdfi
+                    fe 0
+                    dsg 0
+                    addr
+                    cast i32*
+                    dsg f
+                    addr
+                    call 0
+                    fe 1
+                    push <i32; 0>
+                    ret
+                .
+        }
+        {
+            segment: execute
+            name: f
+            type: (i32*) -> void
+            file_name: "positive/ub62/3.c"
+            frame_size: 16
+            max_object_num: 1
+            blocks: [
+                [
+                    {
+                        name: p
+                        dsg_id: 0
+                        type: i32*
+                        offset: 0
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 3
+                    source_location: [
+                        (7, 36)
+                        (7, 20)
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                        [0, 1]
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    mdfi
+                    dsg 0
+                    read 0
+                    drf
+                    read 1
+                    cast u64
+                    dsg print_int
+                    addr
+                    call 2
+                    ret
+                .
+        }
+    ]

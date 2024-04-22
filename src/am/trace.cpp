@@ -94,8 +94,8 @@ void Trace::updateTag(AbstractMachine& am, Object& obj, const Object::Tag& tag)
     for (const auto& item: obj.tags) {
         if (Trace::isIndeterminatelySequenced(am, tag, item)) {
             Formatter formatter{&am};
-            throw UBException{{UB::unsequenced_access}, lib::format(
-                    "Object `${name}` is unsequenced accessed\n${}\n${}",
+            throw UBException{{UB::refer_del_obj, UB::use_ptr_value_which_ref_del_obj, UB::unsequenced_access}, lib::format(
+                    "Object `${name}` is unsequenced accessed(read/modify/delete/indeterminatelize)\n${}\n${}",
                     obj, formatter.tag(tag), formatter.tag(item))};
         }
     }

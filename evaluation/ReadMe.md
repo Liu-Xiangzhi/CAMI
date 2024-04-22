@@ -4,7 +4,7 @@ Evaluation
 ## Introduction
 To demonstrate the ability of UB detection of CAMI, we did that:
 + constructed 100+ test cases(including positive&negative suite)
-+ built a automatic testing framework using python
++ built an automatic evaluation framework using python
 + configured an environment for evaluation using docker
 
 After evaluation, you can get:
@@ -36,3 +36,10 @@ docker run -it --ulimit nofile=65536:65536 -p 8080:8000 cami_eval
 cd cami
 python evaluation/main.py
 ```
+
+## Get verbose output of evaluation
+```shell
+# in docker
+cd evaluation/out && python -m http.server >/dev/null 2>&1 &
+```
+then access `localhost:8080` in your browser and click `evaluation_output.html`.

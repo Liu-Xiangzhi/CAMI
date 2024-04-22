@@ -1,0 +1,114 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    STATIC_LINK ["print_int.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: print_double
+            type: f64 -> void
+            file_name: "libio/print_double.tbc"
+            frame_size: 16
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: number
+                        dsg_id: 0
+                        type: f64
+                        offset: 0
+                    }
+                    {
+                        name: i
+                        dsg_id: 1
+                        type: i64
+                        offset: 8
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (0, 0)
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 1
+                    source_location: [
+                        (0, 0)
+                    ]
+                    sequence_after: [
+                        []
+                    ]
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    mdfi
+                    dsg 1
+                    push <i64; 7>
+                    mdfi
+                    push <u64; 0>
+            loop:
+                    fe 0
+                    dsg 1
+                    read 0
+                    push <i64; 0>
+                    sge
+                    jnt exit_loop
+                    push <u64; 8>
+                    ls
+                    fe 1
+                    dsg 0
+                    addr
+                    cast u8*
+                    dsg 1
+                    read 0
+                    add
+                    drf
+                    read 1
+                    add
+                    fe 2
+                    dsg 1
+                    read 0
+                    push <i64; 1>
+                    sub
+                    mdf 1
+                    j loop
+            exit_loop:
+                    fe 3
+                    dsg print_int
+                    addr
+                    call 0
+                    ret
+                .
+        }
+    ]

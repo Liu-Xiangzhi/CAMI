@@ -26,32 +26,90 @@
 
 namespace cami::am {
 
-ValueBox operator+(ValueBox lhs, ValueBox rhs);
-ValueBox operator-(ValueBox lhs, ValueBox rhs);
-ValueBox operator*(ValueBox lhs, ValueBox rhs);
-ValueBox operator/(ValueBox lhs, ValueBox rhs);
-ValueBox operator%(ValueBox lhs, ValueBox rhs);
-ValueBox operator<<(ValueBox lhs, ValueBox rhs);
-ValueBox operator>>(ValueBox lhs, ValueBox rhs);
-ValueBox operator<(ValueBox lhs, ValueBox rhs);
-ValueBox operator<=(ValueBox lhs, ValueBox rhs);
-ValueBox operator>(ValueBox lhs, ValueBox rhs);
-ValueBox operator>=(ValueBox lhs, ValueBox rhs);
-ValueBox operator==(ValueBox lhs, ValueBox rhs);
-ValueBox operator!=(ValueBox lhs, ValueBox rhs);
-ValueBox operator&(ValueBox lhs, ValueBox rhs);
-ValueBox operator|(ValueBox lhs, ValueBox rhs);
-ValueBox operator^(ValueBox lhs, ValueBox rhs);
-void operator+=(ValueBox& lhs, ValueBox rhs);
-void operator-=(ValueBox& lhs, ValueBox rhs);
-void operator*=(ValueBox& lhs, ValueBox rhs);
-void operator/=(ValueBox& lhs, ValueBox rhs);
-void operator%=(ValueBox& lhs, ValueBox rhs);
-void operator<<=(ValueBox& lhs, ValueBox rhs);
-void operator>>=(ValueBox& lhs, ValueBox rhs);
-void operator&=(ValueBox& lhs, ValueBox rhs);
-void operator|=(ValueBox& lhs, ValueBox rhs);
-void operator^=(ValueBox& lhs, ValueBox rhs);
+ValueBox operator+(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator-(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator*(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator/(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator%(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator<<(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator>>(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator<(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator<=(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator>(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator>=(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator==(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator!=(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator&(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator|(ValueBox
+lhs,
+ValueBox rhs
+);
+ValueBox operator^(ValueBox
+lhs,
+ValueBox rhs
+);
+void operator+=(ValueBox & lhs, ValueBox
+rhs);
+void operator-=(ValueBox & lhs, ValueBox
+rhs);
+void operator*=(ValueBox & lhs, ValueBox
+rhs);
+void operator/=(ValueBox & lhs, ValueBox
+rhs);
+void operator%=(ValueBox & lhs, ValueBox
+rhs);
+void operator<<=(ValueBox & lhs, ValueBox
+rhs);
+void operator>>=(ValueBox & lhs, ValueBox
+rhs);
+void operator&=(ValueBox & lhs, ValueBox
+rhs);
+void operator|=(ValueBox & lhs, ValueBox
+rhs);
+void operator^=(ValueBox & lhs, ValueBox
+rhs);
 
 class OperandStack
 {
@@ -85,11 +143,12 @@ public:
         this->stack.pop_back();
         return rich_value;
     }
+
     RichValue& topDeterminate()
     {
         auto& rich_value = this->top();
-        if (rich_value.attr.indeterminate) {
-            throw UBException{{UB::store_nvr, UB::return_undefined}, lib::format(
+        if (rich_value.attr.indeterminate || OperandStack::referenceDestroyedObject(rich_value.vb)) {
+            throw UBException{{UB::use_ptr_value_which_ref_del_obj, UB::store_nvr, UB::eva_ivd_lvalue, UB::return_undefined}, lib::format(
                     "indeterminate value of type `${}` is used", rich_value.vb->getType())};
         }
         return rich_value;
@@ -99,8 +158,8 @@ public:
     {
         auto rich_value = std::move(this->top());
         this->stack.pop_back();
-        if (rich_value.attr.indeterminate) {
-            throw UBException{{UB::store_nvr, UB::return_undefined}, lib::format(
+        if (rich_value.attr.indeterminate || OperandStack::referenceDestroyedObject(rich_value.vb)) {
+            throw UBException{{UB::use_ptr_value_which_ref_del_obj, UB::store_nvr, UB::eva_ivd_lvalue, UB::return_undefined}, lib::format(
                     "indeterminate value of type `${}` is used", rich_value.vb->getType())};
         }
         return rich_value;
@@ -134,6 +193,19 @@ public:
     [[nodiscard]] const std::deque<RichValue>& getStack() const noexcept
     {
         return this->stack;
+    }
+
+private:
+    static bool referenceDestroyedObject(const ValueBox& vb) noexcept
+    {
+        if (vb->getType().kind() != ts::Kind::pointer) {
+            return false;
+        }
+        auto ent = vb.get<PointerValue>().getReferenced();
+        if (!ent || (*ent)->effective_type.kind() == ts::Kind::function) {
+            return false;
+        }
+        return down_cast<Object&>(**ent).status == Object::Status::destroyed;
     }
 };
 

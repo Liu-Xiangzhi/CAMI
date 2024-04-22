@@ -1,0 +1,92 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_int.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "positive/ub62/2.c"
+            frame_size: 24
+            max_object_num: 2
+            blocks: [
+                [
+                    {
+                        name: x
+                        dsg_id: 0
+                        type: i32 volatile
+                        offset: 0
+                    }
+                    {
+                        name: p
+                        dsg_id: 1
+                        type: i32*
+                        offset: 8
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (7, 6)
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 3
+                    source_location: [
+                        (8, 21)
+                        (8, 20)
+                        (8, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                        [0, 1]
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    push <i32; 1>
+                    mdfi
+                    dsg 0
+                    addr
+                    cast i32*
+                    dsg 1
+                    mdfi
+                    fe 0
+                    dsg 1
+                    read 0
+                    drf
+                    push <i32; 2>
+                    mdf 1
+                    fe 1
+                    dsg 1
+                    read 0
+                    drf
+                    read 1
+                    cast u64
+                    dsg print_int
+                    addr
+                    call 2
+                    fe 2
+                    push <i32; 0>
+                    ret
+                .
+        }
+    ]

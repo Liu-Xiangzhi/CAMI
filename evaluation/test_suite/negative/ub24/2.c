@@ -5,7 +5,7 @@ static void f(void*);
 
 void f(void* p)
 {
-    printf("%d\n", (int)*(int32_t*)p);
+    printf("%d\n", (int)*(char*)(int32_t*)p);
 }
 
 

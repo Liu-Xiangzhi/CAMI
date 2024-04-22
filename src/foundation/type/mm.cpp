@@ -141,7 +141,7 @@ void TypePool<T>::dealloc()
 MemoryManager::MemoryManager()
 {
     auto _basic_area = this->trivial_deconstructed_area.alloc(
-            sizeof(Basic) * static_cast<kind_t>(Kind::_basic_max), 1);
+            sizeof(Basic) * (static_cast<kind_t>(Kind::_basic_max) + 2), 1);
     auto ba = reinterpret_cast<Basic*>(_basic_area);
     this->basic_area = ba;
     for (size_t i = 0; i <= static_cast<kind_t>(Kind::i64); ++i) {
@@ -155,10 +155,16 @@ MemoryManager::MemoryManager()
     new(ba++) Float{Kind::f64};
     new(ba++) Basic{Kind::void_};
     new(ba++) Basic{Kind::null};
+    new(ba++) Basic{Kind::dissociative_pointer};
     new(ba) Basic{Kind::ivd};
 }
 
 const Basic& MemoryManager::getInvalid()
+{
+    return this->basic_area[static_cast<kind_t>(Kind::_basic_max) + 1];
+}
+
+const Basic& MemoryManager::getDissociativePointer()
 {
     return this->basic_area[static_cast<kind_t>(Kind::_basic_max)];
 }

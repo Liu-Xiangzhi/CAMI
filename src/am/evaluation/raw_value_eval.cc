@@ -60,11 +60,11 @@ uint64_t IntegerValue::add(IntegerValue* rhs) const
             return false;
         }
         if (this->type->kind() == Kind::i32) {
-            return ((res >> 1) ^ res) & 0x1'0000'0000;
+            return ((res >> 1) ^ res) & 0x8000'0000;
         }
         constexpr uint64_t MASK = ~(1ULL << 63);
         auto msb_carry = ((this->val & MASK) + (rhs->val & MASK)) >> 63;
-        auto sb_carry = ((this->val >> 63) + (rhs->val >> 63)) >> 1;
+        auto sb_carry = ((this->val >> 63) + (rhs->val >> 63) + msb_carry) >> 1;
         return msb_carry ^ sb_carry;
     }();
     if (overflow) {
@@ -83,40 +83,42 @@ uint64_t IntegerValue::mul(IntegerValue* rhs) const
     }
     const int64_t lhs_val = *reinterpret_cast<const int64_t*>(&this->val);
     const int64_t rhs_val = *reinterpret_cast<const int64_t*>(&rhs->val);
-    uint64_t res;
-    auto overflow = [&]() -> bool {
+    const auto abs = [](int64_t v) -> uint64_t {
+        return v > 0 ? v : -static_cast<uint64_t>(v);
+    };
+    auto [overflow, result] = [&]() -> std::pair<bool, uint64_t> {
         if (this->type->kind() == Kind::i32) {
-            res = lhs_val * rhs_val;
-            return res > INT32_MAX || res < INT32_MIN;
+            auto res = lhs_val * rhs_val;
+            auto signed_res = *reinterpret_cast<int64_t*>(&res);
+            return {signed_res > INT32_MAX || signed_res < INT32_MIN, res};
         }
         // treat `a * b` as `(a1 + a0 * 2**32) * (b1 + b0 * 2**32)`
-        const uint64_t lhs_hi = std::abs(lhs_val) >> 32;
-        const uint64_t lhs_lo = std::abs(lhs_val) & 0xffff'ffff;
-        const uint64_t rhs_hi = std::abs(rhs_val) >> 32;
-        const uint64_t rhs_lo = std::abs(rhs_val) & 0xffff'ffff;
+        const uint64_t lhs_hi = abs(lhs_val) >> 32;
+        const uint64_t lhs_lo = abs(lhs_val) & 0xffff'ffff;
+        const uint64_t rhs_hi = abs(rhs_val) >> 32;
+        const uint64_t rhs_lo = abs(rhs_val) & 0xffff'ffff;
         const bool positive = (lhs_val > 0) == (rhs_val > 0);
         if (lhs_hi != 0 && rhs_hi != 0) { // quadratic factor should be zero
-            return true;
+            return {true, 0}; // value of `result` doesn't matter if overflow
         }
         const auto constant_factor = lhs_lo * rhs_lo;
         const auto linear_factor = lhs_lo * rhs_hi + lhs_hi * rhs_lo;
         if (linear_factor >> 32 != 0 || linear_factor + (constant_factor >> 32) > UINT32_MAX) {
-            return true;
+            return {true, 0};
         }
         auto res_abs = (linear_factor << 32) + constant_factor;
         if (positive) {
-            res = res_abs;
-            return res_abs <= INT64_MAX;
+            return {res_abs > INT64_MAX, res_abs};
         }
-        res = -res_abs;
-        // clangd says that the below expression is always `true`, it should be false alarm
-        return res_abs <= static_cast<uint64_t>(INT64_MIN);
+        // clangd says that the below expression is always `false`, it should be false alarm
+        //   e.g. a1 = b1 = 0xcfff'ffff, a0 = b0 = 0
+        return {res_abs > static_cast<uint64_t>(INT64_MIN), -res_abs};
     }();
     if (overflow) {
         throw UBException{{UB::exceptional_condition}, lib::format(
                 "Integer multiply overflow. lhs = `${}`, rhs = `${}`", *this, *rhs)};
     }
-    return res;
+    return result;
 }
 
 uint64_t IntegerValue::div(IntegerValue* rhs) const
@@ -146,15 +148,17 @@ uint64_t IntegerValue::mod(IntegerValue* rhs) const
     if (rhs->val == 0) {
         throw UBException{{UB::exceptional_condition, UB::div_or_mod_zero, UB::div_not_representable}, "Mod zero"};
     }
-    auto res = [&]() -> uint64_t {
-        if (isUnsigned(this->type->kind())) {
-            return this->val % rhs->val;
-        }
-        int64_t lhs_val = *reinterpret_cast<const int64_t*>(&this->val);
-        int64_t rhs_val = *reinterpret_cast<const int64_t*>(&rhs->val);
-        return lhs_val % rhs_val;
-    }();
-    return res;
+    if (isUnsigned(this->type->kind())) {
+        return this->val % rhs->val;
+    }
+    const int64_t lhs_val = *reinterpret_cast<const int64_t*>(&this->val);
+    const int64_t rhs_val = *reinterpret_cast<const int64_t*>(&rhs->val);
+    auto div_overflow = lhs_val == (this->type->kind() == Kind::i32 ? INT32_MIN : INT64_MIN) && rhs_val == -1;
+    if (div_overflow) {
+        throw UBException{{UB::exceptional_condition, UB::div_not_representable}, lib::format(
+                "Integer division overflow when doing modular. lhs = `${}`, rhs = -1", lhs_val)};
+    }
+    return lhs_val % rhs_val;
 }
 
 bool IntegerValue::less(IntegerValue* rhs) const
@@ -211,33 +215,42 @@ uint64_t IntegerValue::bitwiseXor(IntegerValue* rhs) const
 
 uint64_t IntegerValue::leftShift(IntegerValue* rhs) const
 {
-    ASSERT(this->type->kind() == rhs->type->kind() && integerTypeRank(this->type->kind()) >= integerTypeRank(Kind::i32),
+    ASSERT(isSameIntegerWithoutSigness(this->type->kind(), rhs->type->kind()) &&
+           integerTypeRank(this->type->kind()) >= integerTypeRank(Kind::i32),
            "integer promotion or usual arithmetic conversion is not correctly performed");
     bool _32bit = correspondingUnsignedKind(this->type->kind()) == Kind::u32;
     auto isNegative = [](uint64_t value) -> bool { return value >> 63; };
-    if (isNegative(rhs->val) || rhs->val > (_32bit ? 32 : 64)) {
+    auto is32bitNegative = [](uint64_t value) -> bool { return value >> 31; };
+    if (isNegative(rhs->val) || rhs->val >= (_32bit ? 32 : 64)) {
         throw UBException{{UB::ivd_rhs_of_shift}, lib::format(
                 "Value(${}) of right hand side operand of logical shift is negative or out of the range representable by the promoted type",
-                rhs->val)};
+                *reinterpret_cast<int64_t*>(&rhs->val))};
     }
     auto res = this->val << rhs->val;
-    if (isSigned(this->type->kind()) && (isNegative(this->val) || isNegative(res))) {
-        throw UBException{{UB::ivd_result_of_left_shit}, lib::format(
-                "invalid result(${}) or left hand side value(${}) of left shift operator", res, this->val)};
+    if (isSigned(this->type->kind())) {
+        if (isNegative(this->val)) {
+            throw UBException{{UB::ivd_result_of_left_shit}, lib::format(
+                    "invalid left hand side value(${}) of left shift operator", *reinterpret_cast<const int64_t*>(&this->val))};
+        }
+        if (_32bit ? is32bitNegative(res) : isNegative(res)) {
+            throw UBException{{UB::ivd_result_of_left_shit}, lib::format(
+                    "invalid result value(${}) of left shift operator", *reinterpret_cast<const int64_t*>(&res))};
+        }
     }
     return res;
 }
 
 uint64_t IntegerValue::rightShift(IntegerValue* rhs) const
 {
-    ASSERT(this->type->kind() == rhs->type->kind() && integerTypeRank(this->type->kind()) >= integerTypeRank(Kind::i32),
+    ASSERT(isSameIntegerWithoutSigness(this->type->kind(), rhs->type->kind()) &&
+           integerTypeRank(this->type->kind()) >= integerTypeRank(Kind::i32),
            "integer promotion or usual arithmetic conversion is not correctly performed");
     bool _32bit = correspondingUnsignedKind(this->type->kind()) == Kind::u32;
     auto isNegative = [](uint64_t value) -> bool { return value >> 63; };
-    if (isNegative(rhs->val) || rhs->val > (_32bit ? 32 : 64)) {
+    if (isNegative(rhs->val) || rhs->val >= (_32bit ? 32 : 64)) {
         throw UBException{{UB::ivd_rhs_of_shift}, lib::format(
                 "Value(${}) of right hand side operand of logical shift is negative or out of the range representable by the promoted type",
-                rhs->val)};
+                *reinterpret_cast<int64_t*>(&rhs->val))};
     }
     return this->val >> rhs->val;
 }
@@ -598,8 +611,7 @@ bool PointerValue::checkInvariant()
 
 IntegerValue* PointerValue::operator==(PointerValue* rhs) const
 {
-    return new IntegerValue{&type_manager.getBasicType(Kind::i32),
-                            *this->entity == *rhs->entity && this->offset == rhs->offset};
+    return new IntegerValue{&type_manager.getBasicType(Kind::i32), this->getAddress() == rhs->getAddress()};
 }
 
 IntegerValue* PointerValue::operator==(NullValue*) const
@@ -615,7 +627,7 @@ void PointerValue::set(const Type* type)
 
 void PointerValue::set(Entity* ent)
 {
-    *this->entity = ent;
+    this->entity = ent;
     ASSERT(this->checkInvariant(), "invalid entity");
 }
 
@@ -627,7 +639,15 @@ void PointerValue::set(size_t off)
 
 void PointerValue::set(Entity* ent, size_t off)
 {
-    *this->entity = ent;
+    this->entity = ent;
+    this->offset = off;
+    ASSERT(this->checkInvariant(), "invalid entity or offset");
+}
+
+void PointerValue::set(const Type* type, Entity* ent, size_t off)
+{
+    this->entity = ent;
+    this->type = type;
     this->offset = off;
     ASSERT(this->checkInvariant(), "invalid entity or offset");
 }

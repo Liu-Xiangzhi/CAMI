@@ -1,0 +1,126 @@
+.attribute
+    VERSION "1.0.0"
+    OBJECT
+    ENTRY main
+    STATIC_LINK ["../../libio/print_string.tbc"]
+.function
+    [
+        {
+            segment: execute
+            name: main
+            type: () -> i32
+            file_name: "positive/ub32/2.c"
+            frame_size: 0
+            max_object_num: 0
+            blocks: [
+                []
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (12, 7)
+                        (12, 6)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    fe 0
+                    dsg _str0
+                    read 0
+                    dsg f
+                    addr
+                    call 1
+                    fe 1
+                    push <i32; 0>
+                    ret
+                .
+        }
+        {
+            segment: execute
+            name: f
+            type: char* -> void
+            file_name: "positive/ub32/2.c"
+            frame_size: 16
+            max_object_num: 1
+            blocks: [
+                [
+                    {
+                        name: s
+                        dsg_id: 0
+                        type: char*
+                        offset: 0
+                    }
+                ]
+            ]
+            full_expressions: [
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (6, 7)
+                        (6, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 2
+                    source_location: [
+                        (7, 18)
+                        (7, 5)
+                    ]
+                    sequence_after: [
+                        []
+                        [0]
+                    ]
+                }
+                {
+                    trace_event_cnt : 0
+                    source_location: []
+                    sequence_after: []
+                }
+            ]
+            debug: []
+            code:
+                    dsg 0
+                    mdfi
+                    fe 0
+                    push <char; 'H'>
+                    dsg 0
+                    read 0
+                    drf
+                    mdf 1
+                    fe 1
+                    dsg 0
+                    read 0
+                    dsg print_string
+                    addr
+                    call 1
+                    fe 2
+                    push <i32; 0>
+                    ret
+                .
+        }
+    ]
+
+.object
+    [
+        {
+			segment: string_literal
+            name: _str0
+            type: char[14]
+			value: "hello world!\n\0".
+        }
+    ]

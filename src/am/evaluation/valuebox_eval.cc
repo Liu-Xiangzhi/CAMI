@@ -119,12 +119,13 @@ ValueBox am::operator==(ValueBox lhs, ValueBox rhs) // NOLINT
 {
     ASSERT((isPointerLike(lhs->type->kind()) && isPointerLike(rhs->type->kind())) ||
            (isArithmetic(lhs->type->kind()) || isArithmetic(rhs->type->kind())), "invalid type");
-    ValueBox::usualArithmeticConvert(lhs, rhs);
     auto res = [&]() {
         switch (lhs->type->kind()) {
         case Kind::f32:
+            ValueBox::usualArithmeticConvert(lhs, rhs);
             return *static_cast<F32Value*>(lhs) == static_cast<F32Value*>(rhs);
         case Kind::f64:
+            ValueBox::usualArithmeticConvert(lhs, rhs);
             return *static_cast<F64Value*>(lhs) == static_cast<F64Value*>(rhs);
         case Kind::pointer:
             return rhs->type->kind() == Kind::pointer ?
@@ -136,6 +137,7 @@ ValueBox am::operator==(ValueBox lhs, ValueBox rhs) // NOLINT
                    *static_cast<NullValue*>(lhs) == static_cast<NullValue*>(rhs);
         default:
             ASSERT(isInteger(lhs->type->kind()), "no other type kind allowed");
+            ValueBox::usualArithmeticConvert(lhs, rhs);
             return *static_cast<IntegerValue*>(lhs) == static_cast<IntegerValue*>(rhs);
         }
     }();
@@ -461,9 +463,18 @@ void ValueBox::delete_(Value* value)
     case Kind::pointer:
         delete down_cast<PointerValue*>(value);
         break;
+    case Kind::dissociative_pointer:
+        delete down_cast<DissociativePointerValue*>(value);
+        break;
     case Kind::struct_:
     case Kind::union_:
         delete down_cast<StructOrUnionValue*>(value);
+        break;
+    case Kind::null:
+        delete down_cast<NullValue*>(value);
+        break;
+    case Kind::ivd:
+        delete down_cast<UndefinedValue*>(value);
         break;
     default:
         ASSERT(isInteger(value->type->kind()), "no other type kind allowed");
@@ -484,9 +495,17 @@ Value* ValueBox::copy(Value* value)
         auto v = down_cast<PointerValue*>(value);
         return new PointerValue{v->type, *v->entity, v->offset};
     }
+    case Kind::dissociative_pointer: {
+        auto v = down_cast<DissociativePointerValue*>(value);
+        return new DissociativePointerValue{v->type, v->address};
+    }
     case Kind::struct_:
     case Kind::union_:
-        return new StructOrUnionValue{value->type, down_cast<StructOrUnionValue*>(value)->address};
+        return new StructOrUnionValue{value->type, down_cast<StructOrUnionValue*>(value)->obj};
+    case Kind::null:
+        return new NullValue{};
+    case Kind::ivd:
+        return new UndefinedValue{};
     default:
         ASSERT(isInteger(value->type->kind()), "no other type kind allowed");
         return new IntegerValue{value->type, down_cast<IntegerValue*>(value)->val};

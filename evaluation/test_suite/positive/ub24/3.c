@@ -17,14 +17,15 @@ static void f(int16_t* p);
 
 void f(int16_t* p)
 {
-    printf("%f\n", ((struct B*)p)->y);
+    printf("%p\n", (struct B*)p);
 }
 
 int main()
 {
     struct A a[4];
     for (int16_t i = 0; i < 4; i++){
-        a[i].x = a[i].y = i;
+        a[i].x = i;
+        a[i].y = i;
     }
     f((int16_t*)&a[0]);
     f((int16_t*)&a[1]);

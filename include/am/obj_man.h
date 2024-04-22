@@ -96,9 +96,19 @@ public:
             return reinterpret_cast<Object&>(this->storage[idx]);
         }
 
+        const Object& operator[](uint64_t idx) const CAMI_NOEXCEPT
+        {
+            return const_cast<Page*>(this)->operator[](idx);
+        }
+
         Object* data()
         {
             return reinterpret_cast<Object*>(this->storage);
+        }
+
+        [[nodiscard]] const Object* data() const
+        {
+            return reinterpret_cast<const Object*>(this->storage);
         }
 
         void resetBitmap()
@@ -106,9 +116,9 @@ public:
             std::memset(this->bitmap, 0, lib::roundUpDiv(this->max_size, 8));
         }
 
-        bool testBitmap(Object* object)
+        bool testBitmap(const Object* object) const CAMI_NOEXCEPT
         {
-            return testBitmap(this->getIndex(reinterpret_cast<detail::FakeObject*>(object)));
+            return testBitmap(this->getIndex(reinterpret_cast<const detail::FakeObject*>(object)));
         }
 
         void setBitmap(Object* object)
@@ -121,7 +131,7 @@ public:
             unsetBitmap(this->getIndex(reinterpret_cast<detail::FakeObject*>(object)));
         }
 
-        bool testBitmap(uint64_t idx)
+        [[nodiscard]] bool testBitmap(uint64_t idx) const CAMI_NOEXCEPT
         {
             ASSERT(idx < this->max_size, "index out of boundary");
             return this->bitmap[idx / 8] & (1 << (idx % 8));
@@ -140,7 +150,7 @@ public:
         }
 
     private:
-        uint64_t getIndex(detail::FakeObject* object)
+        uint64_t getIndex(const detail::FakeObject* object) const CAMI_NOEXCEPT
         {
             ASSERT(object >= this->storage && object < this->storage + this->max_size,
                    "cannot get index of object belonging to another page");
@@ -187,7 +197,7 @@ public:
     Object* new_(std::string name, const ts::Type& type, uint64_t address);
     Object* newPermanent(std::string name, const ts::Type& type, uint64_t address);
     // cleanup will NOT dealloc memory
-    void cleanup(Object* object);
+    void cleanup(Object* object, InnerID indeterminatelize_inner_id);
 
     void forceGC()
     {
@@ -197,6 +207,12 @@ public:
     }
 
     lib::Optional<Object*> getReferencedObject(const Object* obj) const;
+
+    [[nodiscard]] bool isValidObjectAddress(uintptr_t addr) const noexcept
+    {
+        return this->belongToEden(addr) || this->belongToSurvivor(addr) ||
+               this->belongToOldGeneration(addr) || this->belongToPermanent(addr);
+    }
 
     [[nodiscard]] const Page& getEden() const noexcept
     {
@@ -243,13 +259,59 @@ private:
     void innerObjectRefRelocate(Object* obj, Object* origin);
     void amRefRelocate(const std::map<Object*, Object*>& mapper);
     static void checkMemoryLeak(Object* object);
-    bool belongToEden(Object* obj);
-    bool belongToSurvivor(Object* obj);
-    bool belongToOldGeneration(Object* obj);
-    bool belongToPermanent(Object* obj);
-    static bool belongTo(Object* obj, Page& page);
+    static bool belongTo(uintptr_t addr, const Page& page) noexcept;
 
-    Page& currentSurvivor()
+    [[nodiscard]] bool belongToEden(uintptr_t addr) const noexcept
+    {
+        return ObjectManager::belongTo(addr, this->eden);
+    }
+
+    [[nodiscard]] bool belongToSurvivor(uintptr_t addr) const noexcept
+    {
+        return ObjectManager::belongTo(addr, this->currentSurvivor());
+    }
+
+    [[nodiscard]] bool belongToOldGeneration(uintptr_t addr) const noexcept
+    {
+        return ObjectManager::belongTo(addr, this->old_generation);
+    }
+
+    [[nodiscard]] bool belongToPermanent(uintptr_t addr) const noexcept
+    {
+        return ObjectManager::belongTo(addr, this->permanent);
+    }
+
+    bool belongToEden(Entity* ent) const noexcept
+    {
+        return ObjectManager::belongTo(ent, this->eden);
+    }
+
+    bool belongToSurvivor(Entity* ent) const noexcept
+    {
+        return ObjectManager::belongTo(ent, this->currentSurvivor());
+    }
+
+    bool belongToOldGeneration(Entity* ent) const noexcept
+    {
+        return ObjectManager::belongTo(ent, this->old_generation);
+    }
+
+    bool belongToPermanent(Entity* ent) const noexcept
+    {
+        return ObjectManager::belongTo(ent, this->permanent);
+    }
+
+    static bool belongTo(Entity* ent, const Page& page) noexcept
+    {
+        return ObjectManager::belongTo(reinterpret_cast<uintptr_t>(ent), page);
+    }
+
+    [[nodiscard]] const Page& currentSurvivor() const noexcept
+    {
+        return this->survivor[this->state.survivor_idx];
+    };
+
+    Page& currentSurvivor() noexcept
     {
         return this->survivor[this->state.survivor_idx];
     };

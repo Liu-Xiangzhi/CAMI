@@ -100,14 +100,16 @@ void VirtualMemory::zeroize(uint64_t addr, uint64_t len)
         throw MemoryAccessException{addr, len, "too large length"};
     }
     if (this->inValidDataSegment(addr, len)) {
-        if (addr + len > this->string_literal_end) {
+        if (addr < this->string_literal_end && len != 0) {
             throw UBException{{UB::modify_string_literal},
-                              lib::format("zeroize string literal segment, address = ${X}, length = ${X}", addr, len)};
+                              lib::format("modify string literal, address = ${X}, length = ${X}", addr, len)};
         }
         std::memset(this->data.data() + (addr - DATA_BASE), 0, len);
+        return;
     }
     if (this->inValidStackSegment(addr, len)) {
         std::memset(&this->stack[STACK_BOUNDARY - addr - len], 0, len);
+        return;
     }
     if (VirtualMemory::inValidHeapSegment(addr, len)) {
         return this->zeroizeHeap(addr, len);
@@ -122,7 +124,8 @@ void VirtualMemory::notifyStackPointer(uint64_t val)
         this->stack.resize(stack_size);
     }
     // optimize: may call `this->stack.shrink_to_fit()` if real stack size is less than
-    //      the capacity of `this->stack`
+    //   the capacity of `this->stack`, but it should be noted that `shrink_to_fit` should be
+    //   delayed once, since a function may return a struct/union(the address of that will be pushed into operand stack).
 }
 
 void VirtualMemory::readCode(uint8_t* dest, uint64_t addr, uint64_t len) const
@@ -177,9 +180,9 @@ void VirtualMemory::readMMIO(uint8_t* dest, uint64_t addr, uint64_t len) const
 
 void VirtualMemory::writeData(uint64_t addr, const uint8_t* src, uint64_t len)
 {
-    if (addr + len > this->string_literal_end) {
+    if (addr < this->string_literal_end && len != 0) {
         throw UBException{{UB::modify_string_literal},
-                          lib::format("write string literal segment, address = ${X}, length = ${X}", addr, len)};
+                          lib::format("modify string literal, address = ${x}, length = ${x}", addr, len)};
     }
     std::memcpy(this->data.data() + (addr - DATA_BASE), src, len);
 }

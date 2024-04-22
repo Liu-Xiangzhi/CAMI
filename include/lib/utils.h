@@ -55,13 +55,20 @@ constexpr uint64_t roundUpDiv(uint64_t a, uint64_t b)
     return a / b + (a % b != 0);
 }
 
-constexpr size_t roundUp(size_t value, size_t base)
+constexpr uint64_t roundUp(uint64_t value, uint64_t base)
 {
     ASSERT(isTwosPower(base), "`base` must be the power of 2");
     return (value + base - 1) & ~(base - 1);
 }
 
-constexpr size_t nthPower(size_t val, size_t n) // NOLINT
+// roundUpPadding(v, b) == roundUp(v, b) - v
+constexpr uint64_t roundUpPadding(uint64_t value, uint64_t base)
+{
+    ASSERT(isTwosPower(base), "`base` must be the power of 2");
+    return (-value) & (base - 1);
+}
+
+constexpr uint64_t nthPower(uint64_t val, uint64_t n) // NOLINT
 {
     if (n == 0) {
         return 1;
@@ -72,26 +79,26 @@ constexpr size_t nthPower(size_t val, size_t n) // NOLINT
     return nthPower(val * val, n / 2) * (n % 2 ? val : 1);
 }
 
-constexpr size_t roundUpNthRoot(size_t val, size_t n)
+constexpr uint64_t roundUpNthRoot(uint64_t val, uint64_t n)
 {
-    size_t left = 0;
-    auto right = val;
-    while (right - left < 4) {
-        auto mid = left / 2 + right / 2;
-        auto tmp = nthPower(mid, n);
-        if (tmp == val) {
-            return mid;
-        }
-        if (tmp < val) {
-            left = mid;
-        } else {
-            right = mid;
-        }
+    ASSERT(n > 0, "0-th root is invalid");
+    // TODO optimize this
+    if (val == 0) {
+        return 0;
     }
-    while (nthPower(left, n) < val) {
-        ++left;
+    if (n == 1) {
+        return val;
     }
-    return left;
+    uint64_t last_nth_power_value = 0;
+    for (int i = 0; i < val; ++i) {
+        auto nth_power_value = nthPower(i, n);
+        if (nth_power_value >= val || nth_power_value < last_nth_power_value /* overflow */) {
+            return i;
+        }
+        last_nth_power_value = nth_power_value;
+    }
+    ASSERT(false, "cannot reach here");
+    return 0;
 }
 
 template<int byte_cnt>

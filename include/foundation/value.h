@@ -271,18 +271,32 @@ public:
     void set(am::Entity* entity);
     void set(size_t offset);
     void set(am::Entity* entity, size_t offset);
+    void set(const ts::Type* type, am::Entity* entity, size_t offset);
 private:
 #ifndef NDEBUG
     bool checkInvariant();
 #endif
 };
 
+class DissociativePointerValue : public Value
+{
+public:
+    const ts::Type* pointer_type;
+    uint64_t address;
+
+    DissociativePointerValue(const ts::Type* type, uint64_t address)
+            : Value(&ts::type_manager.getDissociativePointer()), pointer_type(type), address(address)
+    {
+        ASSERT(type->kind() == ts::Kind::pointer, "invalid type");
+    }
+};
+
 class StructOrUnionValue : public Value
 {
 public:
-    uint64_t address;
+    am::Object* obj;
 
-    StructOrUnionValue(const ts::Type* type, uint64_t address) : Value(type), address(address)
+    StructOrUnionValue(const ts::Type* type, am::Object* obj) : Value(type), obj(obj)
     {
         ASSERT(type->kind() == ts::Kind::struct_ || type->kind() == ts::Kind::union_, "invalid type");
     }
@@ -388,6 +402,11 @@ public:
         return down_cast<PointerValue*>(this->value);
     }
 
+    explicit operator DissociativePointerValue*() const noexcept
+    {
+        return down_cast<DissociativePointerValue*>(this->value);
+    }
+
     explicit operator StructOrUnionValue*() const noexcept
     {
         return down_cast<StructOrUnionValue*>(this->value);
@@ -423,12 +442,21 @@ public:
 #undef DECLARE_FRIEND
 
 CAMI_DECLARE_FORMATTER(cami::IntegerValue);
+
 CAMI_DECLARE_FORMATTER(cami::F32Value);
+
 CAMI_DECLARE_FORMATTER(cami::F64Value);
+
 CAMI_DECLARE_FORMATTER(cami::PointerValue);
+
 CAMI_DECLARE_FORMATTER(cami::StructOrUnionValue);
+
 CAMI_DECLARE_FORMATTER(cami::NullValue);
+
+CAMI_DECLARE_FORMATTER(cami::DissociativePointerValue);
+
 CAMI_DECLARE_FORMATTER(cami::UndefinedValue);
+
 CAMI_DECLARE_FORMATTER(cami::ValueBox);
 
 #endif //CAMI_FOUNDATION_VALUE_H

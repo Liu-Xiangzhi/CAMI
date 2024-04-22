@@ -32,18 +32,18 @@
 namespace cami::am {
 class ObjectManager;
 namespace layout {
-constexpr std::size_t CODE_BASE = 0x0000'0000'0001'0000ULL;
-constexpr std::size_t CODE_BOUNDARY = 0x1000'0000'0000'0000ULL;
-constexpr std::size_t DATA_BASE = CODE_BOUNDARY;
-constexpr std::size_t DATA_BOUNDARY = 0x2000'0000'0000'0000ULL;
-constexpr std::size_t HEAP_BASE = DATA_BOUNDARY;
-constexpr std::size_t HEAP_BOUNDARY = 0x5fff'ffff'ffff'0000ULL;
-constexpr std::size_t STACK_BASE = 0x6000'0000'0000'0000ULL;
-constexpr std::size_t STACK_BOUNDARY = 0x8000'0000'0000'0000ULL;
-constexpr std::size_t MMIO_BASE = STACK_BOUNDARY;
-constexpr std::size_t MMIO_BOUNDARY = 0xa000'0000'0000'0000ULL;
-constexpr std::size_t NOT_USED_BASE = MMIO_BOUNDARY;
-constexpr std::size_t NOT_USED_BOUNDARY = 0xffff'ffff'ffff'ffffULL;
+constexpr uint64_t CODE_BASE = 0x0000'0000'0001'0000ULL;
+constexpr uint64_t CODE_BOUNDARY = 0x1000'0000'0000'0000ULL;
+constexpr uint64_t DATA_BASE = CODE_BOUNDARY;
+constexpr uint64_t DATA_BOUNDARY = 0x2000'0000'0000'0000ULL;
+constexpr uint64_t HEAP_BASE = DATA_BOUNDARY;
+constexpr uint64_t HEAP_BOUNDARY = 0x5fff'ffff'ffff'0000ULL;
+constexpr uint64_t STACK_BASE = 0x6000'0000'0000'0000ULL;
+constexpr uint64_t STACK_BOUNDARY = 0x8000'0000'0000'0000ULL;
+constexpr uint64_t MMIO_BASE = STACK_BOUNDARY;
+constexpr uint64_t MMIO_BOUNDARY = 0xa000'0000'0000'0000ULL;
+constexpr uint64_t NOT_USED_BASE = MMIO_BOUNDARY;
+constexpr uint64_t NOT_USED_BOUNDARY = 0xffff'ffff'ffff'ffffULL;
 } // namespace layout
 
 using namespace lib::literals;
@@ -54,7 +54,7 @@ class VirtualMemory
     {
         static constexpr std::size_t PAGE_SIZE = CAMI_MEMORY_HEAP_PAGE_SIZE;
         static constexpr std::size_t PAGE_TABLE_LEVEL = CAMI_MEMORY_HEAP_PAGE_TABLE_LEVEL;
-        static constexpr std::size_t TOTAL_PAGE_NUM = (layout::HEAP_BOUNDARY - layout::HEAP_BASE) / PAGE_SIZE;
+        static constexpr uint64_t TOTAL_PAGE_NUM = (layout::HEAP_BOUNDARY - layout::HEAP_BASE) / PAGE_SIZE;
         static constexpr std::size_t PAGE_TABLE_ITEM_NUM = lib::roundUpNthRoot(TOTAL_PAGE_NUM, PAGE_TABLE_LEVEL);
 
         struct Page
@@ -138,9 +138,9 @@ class VirtualMemory
 public:
     static constexpr std::size_t MMIO_OBJECT_NUM = MMIO::_num;
 public:
-    explicit VirtualMemory(lib::Array<uint8_t> code, lib::Array<uint8_t> data, uint64_t string_literal_end,
+    explicit VirtualMemory(lib::Array<uint8_t> code, lib::Array<uint8_t> data, uint64_t string_literal_len,
                            ObjectManager& om)
-            : code(std::move(code)), data(std::move(data)), string_literal_end(string_literal_end), mmio(om)
+            : code(std::move(code)), data(std::move(data)), string_literal_end(layout::DATA_BASE + string_literal_len), mmio(om)
     {
         using namespace layout;
         if (this->code.length() > CODE_BOUNDARY - CODE_BASE) {
@@ -177,7 +177,7 @@ public:
     [[nodiscard]] uint32_t read32(uint64_t addr) const
     {
         if (addr % 4) {
-            throw MemoryAccessException{addr, 2, "unaligned read 32bits"};
+            throw MemoryAccessException{addr, 4, "unaligned read 32bits"};
         }
         uint32_t res;
         this->read(reinterpret_cast<uint8_t*>(&res), addr, 4);
@@ -187,7 +187,7 @@ public:
     [[nodiscard]] uint64_t read64(uint64_t addr) const
     {
         if (addr % 8) {
-            throw MemoryAccessException{addr, 2, "unaligned read 64bits"};
+            throw MemoryAccessException{addr, 8, "unaligned read 64bits"};
         }
         uint64_t res;
         this->read(reinterpret_cast<uint8_t*>(&res), addr, 8);
@@ -210,7 +210,7 @@ public:
     void write32(uint64_t addr, uint32_t value)
     {
         if (addr % 4) {
-            throw MemoryAccessException{addr, 2, "unaligned write 32bits"};
+            throw MemoryAccessException{addr, 4, "unaligned write 32bits"};
         }
         this->write(addr, reinterpret_cast<uint8_t*>(&value), 4);
     }
@@ -218,7 +218,7 @@ public:
     void write64(uint64_t addr, uint64_t value)
     {
         if (addr % 8) {
-            throw MemoryAccessException{addr, 2, "unaligned write 64bits"};
+            throw MemoryAccessException{addr, 8, "unaligned write 64bits"};
         }
         this->write(addr, reinterpret_cast<uint8_t*>(&value), 8);
     }

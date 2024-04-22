@@ -25,11 +25,14 @@ using namespace tr;
 
 void Assembler::parseAttribute()
 {
+    this->has_attribute = true;
+    const auto attribute_section_offset = this->peek().begin;
+    this->mbc->attribute.type = static_cast<MBC::Type>(-1);
     while (true) {
         auto token = this->nextToken();
         if (token->type == Token::Type::section_name || token->type == Token::Type::end) {
             this->putBack(std::move(token));
-            return;
+            break;
         }
         if (!Token::isString(token)) {
             this->diagnostic(token->begin, "expect string");
@@ -62,6 +65,12 @@ void Assembler::parseAttribute()
         } else {
             this->diagnostic(token->begin, lib::format("unknown attribute key '${}'", str));
         }
+    }
+    if (this->mbc->attribute.version.empty()) {
+        this->diagnostic(attribute_section_offset, "missing or empty filed `version`");
+    }
+    if (this->mbc->attribute.type == static_cast<MBC::Type>(-1)) {
+        this->diagnostic(attribute_section_offset, "missing filed `type`");
     }
 }
 

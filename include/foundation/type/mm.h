@@ -106,6 +106,7 @@ public:
     MemoryManager();
 public:
     const Basic& getInvalid();
+    const Basic& getDissociativePointer();
     const Basic& getBasicType(Kind kind);
     const Pointer& getPointer(const Type& referenced);
     const Array& getArray(const Type& element, size_t len);

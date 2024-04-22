@@ -20,40 +20,40 @@
 #include <translate/pipe.h>
 #include <translate/linker.h>
 #include <launcher.h>
+#include <args.h>
 
 using namespace cami;
 
-int cami_main(int argc, char* argv[]);
+void cami_main(int argc, char* argv[]);
 
 int main(int argc, char* argv[])
 {
     try {
-        return cami_main(argc, argv);
+        cami_main(argc, argv);
     } catch (std::exception& e) {
         log::unbuffered.eprintln(e.what());
+        return -1;
     }
-    return -1;
 }
 
-int cami_main(int argc, char* argv[])
+void cami_main(int argc, char* argv[])
 {
-    if (argc < 3) {
-        log::unbuffered.eprintln("invalid argument number.\nUsage: cami (run|test_translate) <file_name>");
-        return 1;
-    }
-    std::string_view command = argv[1];
-    std::string_view file_name = argv[2];
-    if (command == "run"sv) {
-        Launcher::launch(file_name);
-    } else if (command == "test_translate"sv) {
+    auto argument = CommandLineParser{argc, argv}.parse();
+    switch (argument.sub_command) {
+    case Argument::SubCommand::none:
+        return;
+    case Argument::SubCommand::run:
+        Launcher::launch(argument.run.file_name);
+        return;
+    case Argument::SubCommand::test_translation: {
         using namespace tr;
-        std::string output_name = std::string{"deasm_"}.append(file_name);
+        std::string output_name = std::string{"deasm_"}.append(argument.test_translation.file_name);
         std::vector<std::unique_ptr<UnlinkedMBC>> mbcs;
-        mbcs.push_back(file_name | read_file | assemble);
+        mbcs.push_back(argument.test_translation.file_name | read_file | assemble);
         Linker::link(std::move(mbcs), {MBC::Type::executable}) | deassemble | output_name;
-    } else {
-        log::unbuffered.eprintln("Unknown command '${}'", command);
-        return 1;
     }
-    return 0;
+        return;
+    default:
+        throw std::runtime_error{lib::format("Unknown command enumeration value: '${}'", static_cast<int>(argument.sub_command))};
+    }
 }

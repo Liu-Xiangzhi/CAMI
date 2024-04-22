@@ -18,6 +18,7 @@
 #include <exception.h>
 #include <lib/downcast.h>
 #include <lib/format.h>
+#include <filesystem>
 
 using namespace cami;
 using namespace tr;
@@ -33,11 +34,22 @@ std::unique_ptr<UnlinkedMBC> Assembler::assemble(std::string_view tbc, std::stri
         this->putBack(std::move(token));
         this->parseSection();
     }
+    if (!this->has_attribute) {
+        this->diagnostic(0, "missing attribute section");
+    }
     if (this->has_error || this->lexer.hasError()) {
         throw AssemblyException{};
     }
     this->mbc->types.insert(this->mbc->types.end(), this->parsed_types.begin(), this->parsed_types.end());
     this->mbc->constants.insert(this->mbc->constants.end(), this->parsed_constants.begin(), this->parsed_constants.end());
+    auto bc_dir = std::filesystem::absolute(name);
+    this->mbc->source_name = bc_dir;
+    for (auto& item: this->mbc->attribute.static_links) {
+        auto link_file_path = std::filesystem::path{std::move(item)};
+        if (!link_file_path.is_absolute()) {
+            item = std::filesystem::weakly_canonical(bc_dir.parent_path() / link_file_path);
+        }
+    }
     return result;
 }
 
@@ -46,7 +58,7 @@ void Assembler::parseSection()
     static const std::map<std::string_view, void (Assembler::*)()> mapper{
             {".attribute"sv, &Assembler::parseAttribute},
             {".comment"sv,   &Assembler::parseComment},
-            {".types"sv,     &Assembler::parseTypes},
+            {".type"sv,      &Assembler::parseTypes},
             {".object"sv,    &Assembler::parseObjects},
             {".function"sv,  &Assembler::parseFunctions},
     };
