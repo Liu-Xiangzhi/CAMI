@@ -110,10 +110,6 @@
     },
     "filter": [
         {
-            "tool" : "CAMI",
-            "rule" : []
-        },
-        {
             "tool" : "kcc",
             "rule" : ["!positive/ub25/4\\.c|negative/ub24/(1|2|4)\\.c"]
         }

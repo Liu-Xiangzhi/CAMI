@@ -13,12 +13,12 @@ def get_help_info(self_name:str):
        {self_name} [-c <config_path>|--config=<config_path>]
                    [-t <testsuit_dir>|--testsuite=<testsuit_dir>]
                    [-o <out_dir>|--out=<out_dir>]
-                   [--verbose=<verbose_output_path>]
-                   [-j <jobs_cnt>|--parallel <jobs_cnt>]
+                   [--verbose=[<verbose_output_path>]]
+                   [-j <jobs_cnt>|--parallel=<jobs_cnt>]
                    [--process-only]
-                   [-v <view_path>|--view-only <view_path>]
+                   [-v <view_path>|--view-only=<view_path>]
                    [-r|--retain-output]
-                   [-s <path>|--save <path>]'''
+                   [-s <path>|--save=<path>]'''
 
 
 def parser_cli(argv: list[str]):
@@ -59,9 +59,11 @@ def parser_cli(argv: list[str]):
                 argument.parallel = int(arg)
             case '--verbose':
                 argument.verbose = True
-                argument.verbose_output_path = os.path.abspath(arg)
+                if arg is not None:
+                    argument.verbose_output_path = os.path.abspath(arg)
             case '-s' | '--save':
                 argument.result_save_path = os.path.abspath(arg)
+                argument.view_path = os.path.abspath(arg)
             case '--process-only':
                 argument.task = argument.Task.process
             case '-v' | '--view-only':
@@ -86,7 +88,7 @@ def process():
     start = time.time()
     result = Engine(config).run(argument.eval_root, argument.test_suite_dir, argument.out_dir)
     end = time.time()
-    print(f'processing cost time: {end - start:.5f}')
+    print(f'processing cost time: {end - start:.5f}s')
     with open(argument.result_save_path, 'w') as f:
         import json
         result_dict = {k: v.dict() for k, v in result.items()}

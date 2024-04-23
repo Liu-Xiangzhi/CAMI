@@ -1,5 +1,5 @@
-CAMI
------------
+# <center>CAMI</center>
+![cami show banner](doc/asset/banner.png)
 C Abstract Machine Interpreter, also an examiner of your C programs.
 
 See [here](./doc/index.md) for other languages.
@@ -13,12 +13,12 @@ Note:
 + it can be built only under Unix-like platform now.
 ### Configure (optional)
 Modify the configuration items in `${RROJECT_ROOT}/config/config.toml` to configure different parameters.
-See [here](./config/ReadMe.md) for detail.
+See [here](./doc/en_us/config_manual.md) for detail.
 ### Compile
 ```shell
 cd ${PROJECT_ROOT}
 cmake -S . -B build
-cmake --build buils
+cmake --build build
 ```
 ### Install (optional)
 ```shell
@@ -28,7 +28,7 @@ cmake --build build --target install # may need 'sudo'
 
 ## Usage
 ```shell
-cami run <file_name>
+cami run <bytecode_file_path>
 ```
 
 ## Possible Improvement
@@ -38,7 +38,5 @@ cami run <file_name>
 + fulfil the atomicity of execution(an instruction either executes successfully or fails without changing any state of AM)
 
 **Note**: restrict to the time of development(as this project is my bachelor thesis project), 
-please do not impose too much requirement or expectation on the code quality of this program,
-and this program is **NOT** undergone exhausted test
+please do not impose too much requirement or expectation on the code quality of this program(**DONE IS BETTER THAN PERFECT**), and this program is **NOT** undergone exhausted test.
 
-DONE IS BETTER THAN PERFECT

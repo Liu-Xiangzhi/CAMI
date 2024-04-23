@@ -40,9 +40,9 @@ constexpr const char* logo_lines[] = {
 };
 constexpr const char* banner_info_lines[] = {
         " |C Abstract Machine Interpreter",
-        " |______________________________________________________________",
+        " |____________________________________________________________________",
         (" |  version: " VERSION),
-        " |  github: www.github.com/Liu-Xiangzhi/CAMI",
+        " |  github:  www.github.com/Liu-Xiangzhi/CAMI",
         " |  license: GPL v2 or later version",
         " |  we have:",
         " |    * more reasonable operational semantic of C standard(organizing)",
