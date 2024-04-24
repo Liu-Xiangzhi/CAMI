@@ -30,24 +30,42 @@ template<typename T>
 struct IsSmartPointer
 {
     static constexpr bool value = false;
+    static constexpr bool is_unique = false;
+    static constexpr bool is_shared = false;
+    static constexpr bool is_weak = false;
 };
 template<typename T>
 struct IsSmartPointer<std::unique_ptr<T>>
 {
     static constexpr bool value = true;
+    static constexpr bool is_unique = true;
+    static constexpr bool is_shared = false;
+    static constexpr bool is_weak = false;
 };
 template<typename T>
 struct IsSmartPointer<std::shared_ptr<T>>
 {
     static constexpr bool value = true;
+    static constexpr bool is_unique = false;
+    static constexpr bool is_shared = true;
+    static constexpr bool is_weak = false;
 };
 template<typename T>
 struct IsSmartPointer<std::weak_ptr<T>>
 {
     static constexpr bool value = true;
+    static constexpr bool is_unique = false;
+    static constexpr bool is_shared = false;
+    static constexpr bool is_weak = true;
 };
 template<typename T>
 constexpr bool is_smart_ptr_v = IsSmartPointer<T>::value;
+template<typename T>
+constexpr bool is_unique_v = IsSmartPointer<T>::is_unique;
+template<typename T>
+constexpr bool is_shared_v = IsSmartPointer<T>::is_shared;
+template<typename T>
+constexpr bool is_weak_v = IsSmartPointer<T>::is_weak;
 template<typename T, typename P, typename = void>
 struct DownCast
 {
@@ -119,7 +137,7 @@ struct DownCast<T, P, std::enable_if_t<
 
 template<typename T, typename P>
 struct DownCast<T, P, std::enable_if_t<
-        is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<T>>> && is_smart_ptr_v<std::remove_cv_t<std::remove_reference_t<P>>>
+        is_unique_v<std::remove_cv_t<std::remove_reference_t<T>>> && is_unique_v<std::remove_cv_t<std::remove_reference_t<P>>>
         && std::is_rvalue_reference_v<P>>>
 {
     static T f(P expr)

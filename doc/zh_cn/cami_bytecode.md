@@ -1,4 +1,195 @@
-# 抽象机指令
+# CAMI 字节码规范
+## 文本形式
+### 语法
+语法
+```bnf
+begin ::= {section}
+section ::= attributes | comment | types | objects | functions
+attributes ::= '.attribute' {attribute}
+attribute ::= version | type | [entry] | [mod_name] | [static_link] | [dynamic_link]
+version ::= 'VERSION' string
+type ::= 'OBJECT' | 'SHARED_OBJECT' | 'EXECUTABLE'
+entry ::= 'ENTRY' string
+mod_name ::= 'MODULE_NAME' string
+static_link ::= 'STATIC_LINK' files
+dynamic_link ::= 'DYNAMIC_LINK' files
+files ::= '[' string {',' string} [','] ']'
+comment ::= '.comment' {string}
+objects ::= '.object' '[' {object} ']'
+object ::= '{'
+                 'segment' : object_segment
+                 'name' ':' string
+                 'type' ':' type_specifier
+                 ['value' ':' bin]
+                 ['relocate' ':' string]
+           '}'
+functions ::= '.function' '['{ function }']'
+function ::= '{'
+                 'segment' ':' function_segment
+                 'name' ':' string
+                 'type' ':' type_specifier
+                 'file_name' ':' string
+                 'frame_size' ':' integer
+                 'max_object_num' ':' integer
+                 'blocks' ':' '[' {block} ']'
+                 'full_expressions' ':' '['{full_expr}']'
+                 'debug' ':' '[' {debug_loc_info} ']'
+                 'code' ':' {code_line} '.'
+             '}'
+object_segment ::= 'string_literal' | 'data' | 'bss' | 'thread_local'
+function_segment ::= 'execute' | 'init' | 'thread_local_init'
+block ::= '[' {automatic_object} ']'
+automatic_object ::= '{'
+                     'name' ':' string
+                     'dsg_id' ':' integer
+                     'type' ':' type_specifier
+                     'offset' ':' integer
+                     ['init_data' ':' bin]
+                 '}'
+full_expr ::= '{'
+                 'trace_event_cnt' ':' integer
+                 'source_location' ':' '[' {location} ']'
+                 'sequence_after' ':' seq_matrix
+              '}'
+location ::= '(' integer ',' integer ')'
+seq_matrix ::= '[' {'[' [integer {',' integer}] ']'} ']'
+debug_loc_info ::= '(' integer ',' integer ','integer')'
+types ::= '.type' type_declaration {type_declaration}
+type_declaration ::= ('struct' | 'union') string type_define
+type_define ::= '{' type_specifier ';'
+                   {type_specifier ';'} '}'
+type_specifier ::= basic_type | 'null' | '(' type_specifier ')' |
+                   type_specifier '*' |
+                   type_specifier '[' integer ']' |
+                   '(' ')' '->' type_specifier |
+                   type_specifier '->' type_specifier |
+                   '(' type_specifier ',' type_specifier {',' type_specifier} ')' '->' type_specifier |
+                   type_specifier qualifier
+basic_type ::= 'i8' | 'u8' | 'i16' | 'u16' | 'i32' | 'u32' | 'i64' | 'u64' |
+               'char' | 'bool' | 'f32' | 'f64' | 'void' |
+               ('struct' | 'union') string
+qualifier ::= 'const' | 'volatile' | 'restrict' | 'atomic'
+bin ::= {hex_sequence | string} '.'
+code_line ::= [label] [instr [info]]
+label ::= unquote_string ':'
+instr ::= unquote_string
+info ::= type_specifier | constant | integer | unquote_string
+constant ::= '&lt;' type_specifier ';' constant_value '>'
+constant_value ::= number | 'nan' | 'inf' | '-inf' | 'null'
+```
+词法
+```bnf
+boolean ::= 'true' | 'false'
+hex_sequence ::= '0xs' hex_pair {hex_pair}
+string ::= unquote_string | quote_string
+integer ::= dec_integer | hex_integer | char
+floating ::= dec_integer '.' dec_digits ['e' ['-'] dec_integer]
+section_name ::= '.' ('.' | '_' | alpha) {'.' | '_' | alpha | dec_digit}
+alpha ::= 'a' | 'b' | 'c' | 'd' | 'e' | 'f' |
+          'g' | 'h' | 'i' | 'j' | 'k' | 'l' |
+          'm' | 'n' | 'o' | 'p' | 'q' | 'r' |
+          's' | 't' | 'u' | 'v' | 'w' | 'x' |
+          'y' | 'z' | 'A' | 'B' | 'C' | 'D' |
+          'E' | 'F' | 'G' | 'H' | 'I' | 'J' |
+          'K' | 'L' | 'M' | 'N' | 'O' | 'P' |
+          'Q' | 'R' | 'S' | 'T' | 'U' | 'V' |
+          'W' | 'X' | 'Y' | 'Z'
+dec_integer ::= ['-'] dec_digits
+hex_integer ::= '0x' hex_digits
+char ::= '\'' full_char_without_newline '\''
+hex_pair ::= hex_digit hex_digit
+dec_digits ::= dec_digit {dec_digit}
+hex_digits ::= hex_digit {hex_digit}
+dec_digit ::= '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' |
+hex_digit ::= dec_digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
+unquote_string ::= normal_char_begin {normal_char}
+     # unquote_char cannot be 'true' or 'false'
+quote_string ::= '"' full_char {full_char} '"'
+normal_char_begin ::= '`' | '~' | '!' | '@' | '$' | '%' | '^' | '&' | '_' | '/' | '+' | '=' | '|' | ''' | '?' | alpha
+normal_char ::= normal_char_begin | dec_digit | '-'
+full_char_without_newline ::= normal_char | escape_char | SPACE_CHARS | ',' | ':' | '.' | '[' | '{' | ']' | '}' |
+                              ';' | '*' | '&lt;' | '>' | '#' | '(' | ')'
+full_char ::= full_char_without_newline | NEWLINE
+escape_char ::= '\a' | '\b' | '\f' | '\n' | '\r' | '\t' | '\v' | '\\' | '\"' | '\'' | '\0' | '\x' hex_digit hex_digit
+```
+### 语义
+文本形式的 CAMI 字节码文件由不同的“节”组成，其中“属性节”是必须存在的，其他的节可以不存在。
+#### 属性
+CAMI 字节码允许如下属性
+|属性|含义|
+|----|---|
+|version|CAMI 字节码的版本，为 "1.0.0"|
+|type|当前文件类型，可选值为 OBJECT（对象文件，即未链接的文件）、EXECUTABLE（可执行文件）、SHARED_OBJECT（动态链接文件）|
+|entry|入口函数名，仅对对象文件或可执行文件有效|
+|mod_name|当前文件所属模块名，仅对对象文件或动态链接文件有效（暂未使用）|
+|static_link|当前文件依赖的其他文件，需要被静态链接在一起，仅对对象文件有效|
+|dynamic_link|当前文件依赖的其他文件，需要在运行时被一同加载，仅对动态链接文件有效（暂未支持）|
+#### 注释
+注释由多个字符串组成，会被 CAMI 忽略。
+#### 类型
+该节用来声明程序中使用的结构体、联合体。需要注意的是 CAMI 字节码中声明结构体、联合体时右大括号`}`不需要分号，且类型声明的方式与C语言不同。
+##### 类型声明语义
+基础类型如下
+|类型|含义|
+|bool|布尔类型|
+|char|字符类型|
+|void|空类型|
+|i8|8位有符号整数|
+|i16|16位有符号整数|
+|i32|32位有符号整数|
+|i64|64位有符号整数|
+|u8|8位无符号整数|
+|u16|16位无符号整数|
+|u32|32位无符号整数|
+|u64|64位无符号整数|
+|f32|符合 IEEE 754 标准的32位浮点数|
+|f64|符合 IEEE 754 标准的64位浮点数|
+
+类型派生如下
++ 空派生 `(base_type)`
++ 指针派生 `base_type *`
++ 数组派生 `base_type [n]`
++ 限定派生 `base_type qualifier`
++ 函数派生 `base_type -> base_type`，`({base_type}) -> base_type`
+
+其中
+
++ 空派生类型和基类型语义等价，即`(base_type)`与`base_type`等价
++ 函数派生中`() -> base_type`和`void -> base_type`等价
+
+示例，如下表格中左侧为 CAMI 字节码类型声明方式，右侧为 C 语言声明方式，两两等价（我们对 C 语言基础类型的字长做了假设）。
+|CAMI|C|
+|----|-|
+|i32|int|
+|f64|double|
+|i32\*|int\*|
+|i32\[5]|int\[5]|
+|i32 const|int const|
+|i32 const|const int|
+|() -> i32|int()|
+|i32\[2][3]|int \[3]\[2]|
+|(i32 -> void)\*|void (\*)(int)|
+|i32\[2]\*|int (\*)\[2]|
+
+#### 对象
+该节描述静态或线程存储周期对象。针对单个对象描述，其字段的含义如下
+|字段|含义|
+|----|---|
+|segment|指明对象的段（性质），可选值为string_literal（静态存储周期的字符串字母量），data（有初始化器的静态存储周期对象），bss（零初始化的静态存储周期对象），thread_local（线程存储周期对象）|
+|name|对象名称|
+|type|对象类型|
+|value|对象初始化的二进制值，bss 段对象会忽略该值|
+|relocate|若该对象的初始化值中含有地址常量，则该字段记录该地址常量对于的对象名称|
+
+其中，value 字段由16进制序列或字符串的序列表示，将序列中字符串转换为16进制序列（一个字符对应两个16进制数，具体数值即为该字符 ASCII 字符集下的码点）并将所有元素拼接后的结果即为表示的二进制值，例如，`0x1234 "hh"` 代表的二进制值为 `0x1 0x2 0x3 0x4 0x6 0x8 0x6 0x8`。
+
+relocate 字段存在的意义在于地址常量是编译期未知、（某些情况下）链接期已知、运行期已知的值，编译器并不知道具体的数值，只能将该地址常量的来源传递给链接期。
+#### 函数
+
+## 二进制形式
+TBD
+## 链接
+
 
 ## 指令列表
 
@@ -8,6 +199,9 @@
 + drf # dereference
 + read
 + mdf # modify
++ zero
++ mdfi
++ zeroi
 
 ### 生命周期管理
 
@@ -15,16 +209,17 @@
 + lb # leaveBlock
 + new # new_object
 + del # delete_object
++ fe
 
 ### 运算
 
-+ idx # subscript
 + dot
 + arrow
++ addr
++ cast
 + cpl # complement
 + neg # negation
 + not
-+ cast
 + mul # multiply
 + div # division
 + mod # modulo
@@ -54,6 +249,8 @@
 ### 其他
 
 + nop
++ pushu
++ push
 + pop
 + dup
 + halt

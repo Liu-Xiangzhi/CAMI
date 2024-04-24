@@ -42,7 +42,6 @@ using std::operator ""sv;
  *               [static_link] | [dynamic_link]
  * version ::= 'VERSION' string
  * type ::= 'OBJECT' | 'SHARED_OBJECT' | 'EXECUTABLE' |
- *          'FIX_ADDRESS_EXECUTABLE'
  * entry ::= 'ENTRY' string
  * mod_name ::= 'MODULE_NAME' string
  * static_link ::= 'STATIC_LINK' files

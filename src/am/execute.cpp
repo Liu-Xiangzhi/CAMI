@@ -95,14 +95,13 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
         throw UBException{{UB::read_ir_obj, UB::read_nvr, UB::read_before_init, UB::eva_ivd_lvalue}, lib::format(
                 "Object `${name}` is read, but it's not in a well status\n${}", obj, obj)};
     }
+    const bool volatile_access =
+            lvalue_type.kind() == Kind::qualify && down_cast<const Qualify&>(lvalue_type).qualifier & Qualifier::volatile_;
     if (obj.effective_type.kind() == Kind::qualify) {
         auto qualifier = down_cast<const Qualify&>(obj.effective_type).qualifier;
-        if (qualifier & Qualifier::volatile_) {
-            if (lvalue_type.kind() != Kind::qualify
-                || !(down_cast<const Qualify&>(lvalue_type).qualifier & Qualifier::volatile_)) {
-                throw UBException{{UB::ivd_read_volatile_obj}, lib::format(
-                        "volatile object '${name}' is read by an lvalue of non-volatile type ${}", obj, lvalue_type)};
-            }
+        if (qualifier & Qualifier::volatile_ && !volatile_access) {
+            throw UBException{{UB::ivd_read_volatile_obj}, lib::format(
+                    "volatile object '${name}' is read by an lvalue of non-volatile type ${}", obj, lvalue_type)};
         }
     }
     if (lvalue_type.kind() == Kind::array) {
@@ -113,7 +112,7 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
         am.operand_stack.push(ValueBox{new PointerValue{&type_manager.getPointer(elem_t), obj.sub_objects[0], 0}});
         return;
     }
-    Execute::attachTag(am, obj, InnerID::newCoexisting(info.getInnerID()));
+    Execute::attachTag(am, obj, volatile_access ? InnerID::newMutualExclude(info.getInnerID()) : InnerID::newCoexisting(info.getInnerID()));
     Execute::do_read(am);
 }
 
