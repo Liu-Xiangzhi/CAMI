@@ -45,17 +45,17 @@ root = "#~/.cami/"
 + + 若第一个字符为 `@` 宏替换列表为以该值的[1, n)的子串为 key 对应的 value（对应关系见后文），其中 n 代表该值的长度
 + + 否则，宏替换列表即为该值
 
-配置文件中可使用的参数映射表如下：
+配置文件的参数映射表如下：
 |键|值|
 |-----|----------|
-|black|"\033[30m"|
-|red|"\033[31m"|
-|green|"\033[32m"|
-|yellow|"\033[33m"|
-|blue|"\033[34m"|
-|magenta|"\033[35m"|
-|cyan|"\033[36m"|
-|white|"\033[37m"|
+|black|"\\\\033[30m"|
+|red|"\\\\033[31m"|
+|green|"\\\\033[32m"|
+|yellow|"\\\\033[33m"|
+|blue|"\\\\033[34m"|
+|magenta|"\\\\033[35m"|
+|cyan|"\\\\033[36m"|
+|white|"\\\\033[37m"|
 |log_level_fatal|0|
 |log_level_error|1|
 |log_level_warning|2|
@@ -66,7 +66,7 @@ root = "#~/.cami/"
 示例：
 
 如下配置（仅演示转换规则，不考虑语义）
-```
+```toml
 a = true
 b.c = false
 [d]
@@ -82,21 +82,21 @@ i = "@black"
 #define D_E_F 2
 #define G_H_I aaa
 #define G_H_I "xxx"
-#define G_H_I "\\033[30m"
+#define G_H_I "\033[30m"
 ```
 
 ## 配置项含义
 下表中：
-+ 以`*`标记的配置项代表其暂未被使用，用户设置任意值
++ 以`*`标记的配置项代表其暂未被使用，用户可设置任意值
 + 以`#`标记的配置项需保证转换后的结果为（C语言含义上的）字符串，未被标记的转换后不应为字符串。
 + 配置数量大小的配置项可以使用字符串的形式（如`"1234"`），且可以添加单位`_k`、`_m`、`_g`、`_K`、`_M`、`_G`（如`"2_k"`），分别代表乘以 1024、1048576、1073741824、1024、1048576、1073741824。
-+ 对于后文部分名称的定义，查看[内部实现](./internals.md)
++ 对于后文部分名词的定义，查看[内部实现](./internals.md)
 
 |配置项|类型|含义|
 |-----|----|---|
-|cami.disable_compiler_guarantee_check|bool|CAMI 会对部分|
+|cami.disable_compiler_guarantee_check|bool|CAMI 在运行时每一条指令时会进行相关的合法性检查，编译器可保证某些检查结果永远正常，该配置项决定是否关闭与这些检查|
 |cami.enable_auto_cache*|bool|是否缓存文本形式字节码对应的二进制结果，若是，将结果存放到cami.cache_path指定的路径下|
-|cami.cache_path*#| string ||
+|cami.cache_path*#| string |字节码缓存的二进制文件的存放路径|
 |cami.enable_log_file | bool |是否允许 CAMI 将日志写入文件中，若否，将打印至终端|
 |cami.log_file_path#| string |CAMI 日志文件存放路径|
 |cami.log.time_format#| string |需要输出时间时，时间的格式|
@@ -108,7 +108,7 @@ i = "@black"
 |cami.log.color.verbose#| string|verbose 等级的日志打印颜色|
 |cami.log.color.debug#| string|debug 等级的日志打印颜色|
 |cami.object_manage.eden_size | int or string |eden 区域大小|
-|cami.object_manage.old_generation_size | int or string |老年代最大大小，运行时所需要的大小超过该值时会触发内存溢出|
+|cami.object_manage.old_generation_size | int or string |老年代区域的最大大小，运行时所需要的大小超过该值时会触发内存溢出|
 |cami.object_manage.large_object_threshold | int or string|大对象门限，大小大于该值的对象将直接分配在老年代区域|
 |cami.object_manage.promote_threshold | int or string|对象提升门限，年龄大于该值的对象将会从年轻代提升至老年代|
 |cami.memory.heap.page_size | int or string|堆内存页表的大小|
