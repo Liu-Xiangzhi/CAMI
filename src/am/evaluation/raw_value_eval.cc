@@ -585,6 +585,22 @@ void F64Value::operator/=(F64Value* rhs)
     this->val = this->div(rhs);
 }
 
+bool PointerValue::isValidOffset(const ts::Type* lvalue_type, am::Entity* entity, uint64_t offset)
+{
+    if (!entity) {
+        return offset == 0;
+    }
+    auto& ref_type = removeQualify(down_cast<const Pointer*>(lvalue_type)->referenced);
+    auto& ent_type = removeQualify(entity->effective_type);
+    if (ent_type.kind() == Kind::function || ref_type.kind() == Kind::function) {
+        return offset == 0;
+    }
+    if (isCCharacter(ref_type.kind())) {
+        return offset <= ent_type.size();
+    }
+    return offset == 0 || offset == ent_type.size();
+}
+
 #ifndef NDEBUG
 
 bool PointerValue::checkInvariant()
@@ -595,16 +611,8 @@ bool PointerValue::checkInvariant()
     if (!this->entity) {
         return this->offset == 0;
     }
-    auto& ref_type = removeQualify(down_cast<const Pointer*>(this->type)->referenced);
-    auto& ent_type = removeQualify((*this->entity)->effective_type);
-    if (ent_type.kind() == Kind::function || ref_type.kind() == Kind::function) {
-        return this->offset == 0;
-    }
-    ASSERT((*this->entity)->address < UINT64_MAX - this->offset, "invalid offset");
-    if (isCCharacter(ref_type.kind())) {
-        return this->offset <= ent_type.size();
-    }
-    return this->offset == 0 || this->offset == ent_type.size();
+    ASSERT((*this->entity)->address < UINT64_MAX - offset, "invalid offset");
+    return PointerValue::isValidOffset(this->type, *this->entity, this->offset);
 }
 
 #endif

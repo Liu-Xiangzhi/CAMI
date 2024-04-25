@@ -40,14 +40,14 @@ constexpr const char* logo_lines[] = {
 };
 constexpr const char* banner_info_lines[] = {
         " |C Abstract Machine Interpreter",
-        " |____________________________________________________________________",
+        " |______________________________________________________________________",
         (" |  version: " VERSION),
         " |  github:  www.github.com/Liu-Xiangzhi/CAMI",
         " |  license: GPL v2 or later version",
         " |  we have:",
-        " |    * more reasonable operational semantic of C standard(organizing)",
-        " |    * \033[32mSOUND & COMPLETE UB detection ability\033[0m(under our semantic)",
-        " |    * inefficient execution but trying to speed up!",
+        " |  * more reasonable operational semantic that conforming to C standard",
+        " |  * \033[32mSOUND & COMPLETE UB detection ability\033[0m(under our semantic)",
+        " |  * inefficient execution but trying to speed up!",
         " |",
 };
 } // anonymous namespace

@@ -62,7 +62,7 @@ void Execute::dereference(AbstractMachine& am)
     am.dsg_reg.offset = pointer.get<PointerValue>().getOffset();
     if (am.dsg_reg.entity->effective_type.kind() != Kind::function) {
         auto& obj = down_cast<Object&>(*am.dsg_reg.entity);
-        if (pointer.get<PointerValue>().getOffset() >= obj.effective_type.size()) {
+        if (pointer.get<PointerValue>().getOffset() >= obj.size()) {
             throw UBException{{UB::deref_ending_ptr}, lib::format(
                     "dereference pointer which points just past the last element of certain array\n${}", pointer)};
         }
@@ -129,7 +129,7 @@ void Execute::zero(AbstractMachine& am, InstrInfo info)
 {
     Execute::basicModifyCheck(am, false);
     auto& obj = down_cast<Object&>(*am.dsg_reg.entity);
-    am.memory.zeroize(obj.address, obj.effective_type.size());
+    am.memory.zeroize(obj.address, obj.size());
     if (auto ref = am.object_manager.getReferencedObject(&obj); ref) {
         [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
         ASSERT(cnt == 1, "referenced object do not contains referencing object's reference");
@@ -152,7 +152,7 @@ void Execute::zeroInit(AbstractMachine& am)
     Execute::basicModifyCheck(am, true);
     auto& obj = down_cast<Object&>(*am.dsg_reg.entity);
     COMPILER_GUARANTEE(obj.status == Object::Status::uninitialized, lib::format("object `${}` is double initialized", obj.name));
-    am.memory.zeroize(obj.address, obj.effective_type.size());
+    am.memory.zeroize(obj.address, obj.size());
     if (auto ref = am.object_manager.getReferencedObject(&obj); ref) {
         [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
         ASSERT(cnt == 1, "referenced object do not contains referencing object's reference");
@@ -182,18 +182,22 @@ void Execute::do_read(am::AbstractMachine& am)
         }
         case Kind::pointer: {
             auto addr = am.memory.read64(obj.address);
-            if (am.isValidEntityAddress(addr)) {
-                auto ptr = reinterpret_cast<Entity*>(addr);
-                auto offset = am.memory.read64(obj.address + 8);
-                return new PointerValue{&lvalue_type, ptr, offset};
+            auto offset = am.memory.read64(obj.address + 8);
+            if (!am.isValidEntityAddress(addr)) {
+                return new DissociativePointerValue{&lvalue_type, addr + offset};
             }
-            return new DissociativePointerValue{&lvalue_type, addr};
+            auto ptr = reinterpret_cast<Entity*>(addr);
+            if (!PointerValue::isValidOffset(&lvalue_type, ptr, offset)) {
+                return new DissociativePointerValue{&lvalue_type, addr + offset};
+            }
+            return new PointerValue{&lvalue_type, ptr, offset};
         }
         case Kind::struct_:
         case Kind::union_:
             return new StructOrUnionValue{&lvalue_type, &obj};
         default:
             ASSERT(isInteger(lvalue_type.kind()), "no other type kind could occur");
+            ASSERT(am.dsg_reg.offset <= obj.size(), "invalid offset of designation register");
             uint64_t val = 0;
             am.memory.read(reinterpret_cast<uint8_t*>(&val), obj.address + am.dsg_reg.offset, lvalue_type.size());
 #ifdef CAMI_TARGET_INFO_BIG_ENDIAN
@@ -254,16 +258,22 @@ void Execute::do_modify(am::AbstractMachine& am, ValueBox vb) // NOLINT
     case Kind::struct_:
     case Kind::union_: {
         auto& struct_or_union_obj = *vb.get<StructOrUnionValue>().obj;
-        auto size = obj.effective_type.size();
-        std::unique_ptr<uint8_t[]> buf{new uint8_t[size]};
-        am.memory.read(buf.get(), struct_or_union_obj.address, obj.effective_type.size());
-        am.memory.write(obj.address, buf.get(), obj.effective_type.size());
+        auto obj_size = obj.size();
+        std::unique_ptr<uint8_t[]> buf{new uint8_t[obj_size]};
+        am.memory.read(buf.get(), struct_or_union_obj.address, obj_size);
+        am.memory.write(obj.address, buf.get(), obj_size);
         copyStatus(struct_or_union_obj, obj);
     }
         break;
     default:
         ASSERT(isInteger(write_value_type.kind()), "no other type kind could occur");
+        ASSERT(am.dsg_reg.offset <= obj.size(), "invalid offset of designation register");
         auto val = vb.get<IntegerValue>().uint64();
+        if (removeQualify(obj.effective_type).kind() == Kind::pointer) {
+            ASSERT(isCCharacter(write_value_type.kind()), "pointer object cannot modified by non-pointer non-character lvalue type");
+            Execute::modifyPointerObjectInCharacterType(am, obj, val);
+            return;
+        }
 #ifdef CAMI_TARGET_INFO_LITTLE_ENDIAN
         am.memory.write(obj.address + am.dsg_reg.offset, reinterpret_cast<uint8_t*>(&val), write_value_type.size());
 #else
@@ -271,15 +281,24 @@ void Execute::do_modify(am::AbstractMachine& am, ValueBox vb) // NOLINT
                         write_value_type.size());
 #endif
         obj.status = Object::Status::well;
-        if (isCCharacter(write_value_type.kind())) {
-            Execute::checkObjectRepresentation(am, obj);
-        }
     }
 }
 
-void Execute::checkObjectRepresentation(AbstractMachine& am, Object& obj)
+void Execute::modifyPointerObjectInCharacterType(AbstractMachine& am, Object& obj, uint64_t value)
 {
-    // no non_value_representation is defined now... so do nothing
+    if (auto ref = am.object_manager.getReferencedObject(&obj); ref) {
+        [[maybe_unused]] auto cnt = (*ref)->referenced_by.erase(&obj);
+        ASSERT(cnt == 1, "referenced object do not contains referencing object's reference");
+    }
+    uint64_t buf[2];
+    am.memory.read(reinterpret_cast<uint8_t*>(buf), obj.address, 16);
+    *(reinterpret_cast<uint8_t*>(buf) + am.dsg_reg.offset) = static_cast<uint8_t>(value);
+    if (am.object_manager.isValidObjectAddress(buf[0])) {
+        reinterpret_cast<Object*>(buf[0])->referenced_by.insert(&obj);
+    }
+    am.memory.write64(obj.address, buf[0]);
+    am.memory.write64(obj.address + 8, buf[1]);
+    obj.status = Object::Status::well;
 }
 
 void Execute::enterBlock(AbstractMachine& am, InstrInfo info)
@@ -366,7 +385,7 @@ void Execute::deleteObject(AbstractMachine& am, InstrInfo info)
     auto inner_id = InnerID::newMutualExclude(info.getInnerID());
     Execute::attachTag(am, obj, inner_id);
     am.object_manager.cleanup(&obj, inner_id);
-    am.heap_allocator->dealloc(obj.address, obj.effective_type.size());
+    am.heap_allocator->dealloc(obj.address, obj.size());
 }
 
 void Execute::fullExpression(AbstractMachine& am, InstrInfo info)
@@ -575,9 +594,9 @@ void Execute::modifyCheck(am::AbstractMachine& am, bool ignore_const)
 {
     const auto inexactlyOverlap = [](Object& a, Object& b) {
         auto a_start = a.address;
-        auto a_end = a.address + a.effective_type.size();
+        auto a_end = a.address + a.size();
         auto b_start = b.address;
-        auto b_end = b.address + b.effective_type.size();
+        auto b_end = b.address + b.size();
         if (a_start == b_start && a_end == b_end) {
             return false;
         }

@@ -69,7 +69,7 @@ using std::operator ""sv;
  *                  'debug' ':' '[' {debug_loc_info} ']'
  *                  'code' ':' {code_line} '.'
  *              '}'
- * data_segment ::= 'string_literal' | 'data' |
+ * object_segment ::= 'string_literal' | 'data' |
  *                  'bss' | 'thread_local'
  * function_segment ::= 'execute' | 'init' |
  *                      'thread_local_init'

@@ -344,8 +344,7 @@ void relocate(UnlinkedMBC& unlinked_mbc, const uint64_t static_object_cnt)
         sym_map.emplace(lib::format("#${}", *unlinked_mbc.types[i]), i);
     }
     for (size_t i = 0; i < unlinked_mbc.constants.size(); ++i) {
-        sym_map.emplace(lib::format("<${}; ${}>", *unlinked_mbc.constants[i].first, unlinked_mbc.constants[i].second),
-                        i);
+        sym_map.emplace(lib::format("<${}; ${}>", *unlinked_mbc.constants[i].first, unlinked_mbc.constants[i].second), i);
     }
     for (size_t i = 0; i < unlinked_mbc.functions.size(); ++i) {
         if (!sym_map.emplace(unlinked_mbc.functions[i]->name, InstrInfo::IdentifierId::fromFunctionIndex(i)).second) {

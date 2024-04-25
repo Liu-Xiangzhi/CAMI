@@ -2,7 +2,7 @@
 ## 文本形式
 ### 语法
 语法
-```bnf
+```ebnf
 begin ::= {section}
 section ::= attributes | comment | types | objects | functions
 attributes ::= '.attribute' {attribute}
@@ -78,7 +78,7 @@ constant ::= '&lt;' type_specifier ';' constant_value '>'
 constant_value ::= number | 'nan' | 'inf' | '-inf' | 'null'
 ```
 词法
-```bnf
+```ebnf
 boolean ::= 'true' | 'false'
 hex_sequence ::= '0xs' hex_pair {hex_pair}
 string ::= unquote_string | quote_string
@@ -118,12 +118,14 @@ escape_char ::= '\a' | '\b' | '\f' | '\n' | '\r' | '\t' | '\v' | '\\' | '\"' | '
 CAMI 字节码允许如下属性
 |属性|含义|
 |----|---|
-|version|CAMI 字节码的版本，为 "1.0.0"|
-|type|当前文件类型，可选值为 OBJECT（对象文件，即未链接的文件）、EXECUTABLE（可执行文件）、SHARED_OBJECT（动态链接文件）|
-|entry|入口函数名，仅对对象文件或可执行文件有效|
-|mod_name|当前文件所属模块名，仅对对象文件或动态链接文件有效（暂未使用）|
-|static_link|当前文件依赖的其他文件，需要被静态链接在一起，仅对对象文件有效|
-|dynamic_link|当前文件依赖的其他文件，需要在运行时被一同加载，仅对动态链接文件有效（暂未支持）|
+|VERSION|CAMI 字节码的版本，为 "1.0.0"|
+|TYPE|当前文件类型，可选值为 OBJECT（对象文件，即未链接的文件）、EXECUTABLE（可执行文件）、SHARED_OBJECT（动态链接文件）|
+|ENRTY|入口函数名，仅对对象文件或可执行文件有效|
+|MODULE_NAME|当前文件所属模块名，仅对对象文件或动态链接文件有效（暂未使用）|
+|STATIC_LINK|当前文件依赖的其他文件，需要被静态链接在一起，仅对对象文件有效|
+|DYNAMIC_LINK|当前文件依赖的其他文件，需要在运行时被一同加载，仅对动态链接文件有效（暂未支持）|
+
+同一个对象文件不可以同时具有`ENTRY`和`MODULE_NAME`属性。
 #### 注释
 注释由多个字符串组成，会被 CAMI 忽略。
 #### 类型
@@ -132,6 +134,7 @@ CAMI 字节码允许如下属性
 基础类型如下
 
 |类型|含义|
+|---|----|
 |bool|布尔类型|
 |char|字符类型|
 |void|空类型|
@@ -158,7 +161,7 @@ CAMI 字节码允许如下属性
 + 空派生类型和基类型语义等价，即`(base_type)`与`base_type`等价
 + 函数派生中`() -> base_type`和`void -> base_type`等价
 
-示例，如下表格中左侧为 CAMI 字节码类型声明方式，右侧为 C 语言声明方式，两两等价（关于 C 语言基础类型的字长，参见[特性支持文档](feature_support.md)）。
+示例，如下表格中左侧为 CAMI 字节码类型声明方式，右侧为 C 语言声明方式，两两等价（关于 C 语言基础类型的宽度，参见[特性支持文档](feature_support.md)）。
 |CAMI|C|
 |----|-|
 |i32|int|
@@ -179,86 +182,204 @@ CAMI 字节码允许如下属性
 |segment|对象的段（性质），可选值为string_literal（静态存储周期的字符串字母量），data（有初始化器的静态存储周期对象），bss（零初始化的静态存储周期对象），thread_local（线程存储周期对象）|
 |name|对象名称|
 |type|对象类型|
-|value|对象初始化的二进制值，bss 段对象会忽略该值|
+|value|对象初始化值，bss 段对象会忽略该值|
 |relocate|若该对象的初始化值中含有地址常量，则该字段记录该地址常量对应的对象名称|
 
-其中，value 字段由16进制序列或字符串组成的序列表示，将序列中字符串转换为16进制序列（一个字符对应两个16进制数，具体数值即为该字符 ASCII 字符集下的码点）并将所有元素拼接后的结果即为表示的二进制值，例如，`0x1234 "hh"` 代表的二进制值为 `0x1 0x2 0x3 0x4 0x6 0x8 0x6 0x8`。
+其中，value 字段描述对象的对象表示，即二进制形式数据，CAMI在启动时直接将该二进制数据加载至数据段。value 字段由16进制序列或字符串的序列组成，将序列中字符串转换为16进制序列（一个字符对应两个16进制数，具体数值即为该字符 ASCII 字符集下的码点）并将所有元素拼接后的结果即为其代表的值，例如，`0xs1234ff "hh"` 代表的二进制值为 `0x12 0x34 0xff 0x68 0x68`。
 
 relocate 字段存在的意义在于地址常量是编译期未知、（某些情况下）链接期已知、运行期已知的值，编译器并不知道具体的数值，只能将该地址常量的来源传递给链接器。
 #### 函数
+该节描述函数，其字段的含义如下
+|字段|含义|
+|----|---|
+|segment|函数的段（性质），可选值为execute（普通的函数），init（初始化函数，在程序启动后，入口函数和线程初始化函数调用前被调用），thread_local_init（线程初始化函数，在线程创建后（含主线程）线程入口函数调用前被调用）|
+|name|函数名称|
+|type|函数类型|
+|file_name|该函数的实现所在的源文件|
+|frame_size|函数栈帧大小，以字节为单位|
+|max_object_num|在函数运行过程中，同时存活的自动存储周期对象个数的最大值|
+|blocks|函数的块数组信息，详见后文|
+|full_expressions|函数的全表达式信息，详见后文|
+|debug|debug 信息，目前仅包含源代码行号和字节码偏移量的对应关系，详见后文|
+|code|函数字节码|
+
+##### 块数组信息
+CAMI 将函数视为一系列块组成的。例如
+```c
+void f()
+{ // block 0 begin
+    { // block 1 begin
+        { // block 3 begin
+
+        } // block3 end
+    } // block 1 end
+    { // block 2 begin
+
+    } // block 2 end
+} // block 0 end
+```
+块的标号规则不指定，只需要块描述信息和字节码中使用的块标号对应即可。
+
+块数组信息是一个块描述信息的数组，块描述信息在该数组中的下标由其标号决定，即 i 号块描述信息在第 i 位上（从0开始）。
+
+块描述信息目前仅包含该块内的自动存储周期的对象信息，其字段及含义如下：
+
+|字段|含义|
+|----|---|
+|name|对象名称|
+|dsg_id|对象定位 ID，`dsg` 指令可用此 ID 唯一定义某一对象|
+|type|对象类型|
+|offset|对象地址相对于当前函数栈帧的偏移量|
+|init_data|对象初始化值，其含义与[对象](#对象)一节中的 value 字段相同。若缺少该字段，对象被创建后处于未初始化状态|
+
+##### 全表达式信息
+
+全表达式信息主要描述该全表达式中所有“追踪事件”的 sequence after 关系以及其在源代码中的位置。函数调用、修改对象、非左值转换地读取对象或删除对象统称为追踪事件。每个追踪事件在当前全表达式中有唯一的 ID,称为（相对当前全表达式的）内部ID（InnerID）。
+全表达式信息的字段及其含义如下：
+|字段|含义|
+|----|---|
+|trace_envent_cnt|追踪事件的个数|
+|source_location|每个追踪事件在源代码中的位置|
+|sequence_after|追踪事件间的 sequence after 关系，见后文|
+
+sequence_after字段用一个邻接表表示追踪事件间的 sequence after 关系。若事件 A sequence After 事件 B，那么sequence_after字段的第InnerID(A)个元素（是一个数组）中应包含InnerID(B)。
+
+示例：
+
+对于如下C程序（不考虑语义）（共有两个全表达式，每个全表达式的追踪事件相关信息以注释的形式被标注）：
+```c
+int b(int, int); // line 1
+void f(int a)
+{
+    a/*trace event 0, read a*/ = 1; // full expression 1
+    b/*not a trace event, b is read by lvalue conversion*/ (/*trace event 2, call b*/ a/*trace event 0, read a*/, a/*trace event 1, read a*/); // full expression 2, trace event 2 sequence after trace event 0&1
+}
+```
+对应的 full_expressions 字段应为
+```
+full_expressions: [
+    {
+        trace_event_cnt : 1
+        source_location: [
+			(4, 5)
+		]
+        sequence_after: [
+            []
+        ]
+    }
+    {
+        trace_event_cnt : 3
+        source_location: [
+			(6, 87)
+            (6, 115)
+			(6, 60)
+		]
+        sequence_after: [
+            []
+            []
+            [0, 1]
+        ]
+    }
+]
+```
+
+##### debug 信息
+debug 信息目前仅包含源代码行号和字节码偏移量的对应关系，其表示为一个三元组的数组。该三元组`(addr, len, line)`的含义为，将当前函数的函数字节码的起始地址视为 0，当前函数中地址处于`[addr, addr + len)`范围的函数字节码对应源代码（`file_name`字段）的第`line`行。
+
+例如，对于如下字节码（不考虑语义）
+```
+add
+sub
+nop
+ret
+xor
+```
+如下debug信息及其含义是：
+```
+(0, 2, 2) add sub 对应源代码第 2 行
+(3, 2, 4) ret xor 对应源代码第 4 行
+          nop 不对应源代码的任意一行
+```
 
 ## 二进制形式
 TBD
-## 链接
 
+## 链接
+CAMI 支持将一个或多个对象文件链接为一个对象文件或可执行文件或动态链接文件。因此一个对象文件中可以使用其他文件定义的符号且不需要提前声明。
+将多个对象文件链接到一个对象文件不涉及重定向（字符串字面量除外），任意若干个对象文件都可以链接在一起。而将对象文件链接到可执行文件或动态链接文件则需要保证所有对象文件间不存在符号冲突且不引用未定义的符号。链接成功后，所有的符号（部分地址常量除外）都将被替换为数值。
 
 ## 指令列表
 
-### 定位/读取对象
+### 定位/访问对象
 
-+ dsg # designate_object
-+ drf # dereference
-+ read
-+ mdf # modify
-+ zero
-+ mdfi
-+ zeroi
++ [dsg](#dsg)
++ [drf](#drf)
++ [read](#read)
++ [mdf](#mdf)
++ [zero](#zero)
++ [mdfi](#mdfi)
++ [zeroi](#zeroi)
 
 ### 生命周期管理
 
-+ eb # enterBlock
-+ lb # leaveBlock
-+ new # new_object
-+ del # delete_object
-+ fe
++ [eb](#eb)
++ [lb](#lb)
++ [new](#new)
++ [del](#del)
 
 ### 运算
 
-+ dot
-+ arrow
-+ addr
-+ cast
-+ cpl # complement
-+ neg # negation
-+ not
-+ mul # multiply
-+ div # division
-+ mod # modulo
-+ add # addition
-+ sub # subtraction
-+ ls # left shift
-+ rs # right shift
-+ sl # set less than
-+ sle # set less equal
-+ sg # set great
-+ sge # set great equal
-+ seq # set equal
-+ sne # set not equal
-+ and # bitwise and
-+ or # bitwise or
-+ xor # bitwise xor
++ [dot](#dot)
++ [arrow](#arrow)
++ [addr](#addr)
++ [cast](#cast)
++ [cpl](#cpl)
++ [neg](#neg)
++ [not](#not)
++ [mul](#mul)
++ [div](#div)
++ [mod](#mod)
++ [add](#add)
++ [sub](#sub)
++ [ls](#ls)
++ [rs](#rs)
++ [sl](#sl)
++ [sle](#sle)
++ [sg](#sg)
++ [sge](#sge)
++ [seq](#seq)
++ [sne](#sne)
++ [and](#and)
++ [or](#or)
++ [xor](#xor)
 
 ### 控制流
 
-+ j # jump
-+ jst # jump_if_set
-+ jnt # jump_if_not_set
-+ call
-+ ij # indirect jump
-+ ret # return
++ [j](#j)
++ [jst](#jst)
++ [jnt](#jnt)
++ [call](#call)
++ [ij](#ij)
++ [ret](#ret)
+
+### 栈操作
+
++ [pushu](#pushu)
++ [push](#push)
++ [pop](#pop)
++ [dup](#dup)
 
 ### 其他
 
-+ nop
-+ pushu
-+ push
-+ pop
-+ dup
-+ halt
++ [nop](#nop)
++ [fe](#fe)
++ [halt](#halt)
 
 ## 指令描述
+下文指令描述中不包含检测逻辑和形式化表述。关于指令语义的形式化描述，参见[C 语言操作语义](./operational_semantic.md)。
 
-#### 示例
+### 示例
+指令含义解释
 
 指令编码（以字节为单位）
 
@@ -269,204 +390,145 @@ TBD
 
 ```
 syntax
+op info(tag)
 ```
+语法中被括起来的内容说明了括号前的部分被编码到指令的哪个部分，上例中，info会被编码到 tag 中。
 
-语义解释
-
-```
-formal semantic definition
-builtins:
-    builtin object:
-        stack
-        call_stack
-        object_reference_register
-        pc
-        current_function
-        indeterminate_representation
-        non_value_representation
-    builtin function:
-        jump
-        designateMember
-        fetchTypeByID
-        fetchFunction
-        dereference
-        addTag
-        Type.*
-        newObject
-        deleteObject
-        halt
-```
+额外说明（可选的）
 
 ### add
+ADDition
 
+弹出运算数栈栈顶两元素，并将相加后的结果压入栈中。
 | op  |
 |-----|
 | 0   |
-| 138 |
+| 139 |
 
 ```
 add
 ```
 
-弹出运算数栈栈顶两元素，并将相加后的结果压入栈中。
+### addr
+ADDRess
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs + rhs)
-```
-
-### and
+获取指向对象引用寄存器定位的对象的指针，并将其压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 146 |
+| 130 |
+
+```
+addr
+```
+
+### and
+bitwise AND
+
+弹出运算数栈栈顶两元素，并将按位相与后的结果压入栈中。
+| op  |
+|-----|
+| 0   |
+| 149 |
 
 ```
 and
 ```
 
-弹出运算数栈栈顶两元素，并将按位相与后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs & rhs)
-```
-
 ### arrow
+弹出运算数栈栈顶元素(该元素应指向结构体或联合体的指针)，定位该指针指向的对象的第`member_id`个子对象，将该子对象引用存放至对象引用寄存器中。
 
-| op  | id  |
+| op  | member_id  |
 |-----|-----|
 | 0   | 1-3 |
-| 130 |     |
+| 129 |     |
 
 ```
-arrow <MEMBER_ID>
-```
-
-弹出运算数栈栈顶元素(该元素应指向结构体或联合体的指针)，定位该指针指向的对象的第&lt;MEMBER_ID&gt;个子对象，将该子对象引用存放至对象引用寄存器中。
-
-```js
-pointer = stack.pop()
-object_reference_register = designateMember(pointer, MEMBER_ID)
+arrow integer(member_id)
 ```
 
 ### call
+弹出运算数栈栈顶元素(该元素应为合法的函数指针)，保存返回地址并跳转至该元素指向的函数执行。同时自动创建该函数的栈帧并进入第一个block。
+| op |
+|----|
+| 0  |
+| 35 |
 
+```
+call
+```
+
+### cast
+弹出运算数栈栈顶元素，将该元素的类型转换为`type_id`指代的类型，并重新压回栈中。
+
+| op  | type_id  |
+|-----|-----|
+| 0   | 1-3 |
+| 131 |     |
+
+```
+cast type_specifier(type_id)
+```
+
+运算数类型和`type_id`指代的类型均应为标量类型。
+
+### cpl
+ComPLement
+
+弹出运算数栈栈顶元素，并将按位取反后的结果压入栈中。
+| op  |
+|-----|
+| 0   |
+| 132 |
+
+```
+cpl
+```
+
+### del
+DELete
+
+弹出操作数栈栈顶元素，销毁该元素指向的（分配在堆区）对象。
 | op |
 |----|
 | 0  |
 | 19 |
 
 ```
-call
-```
-
-弹出运算数栈栈顶元素(该元素应为合法的函数指针)，保存返回地址并跳转至该元素指向的函数执行。同时自动创建该函数的栈帧并进入第一个block。
-
-```js
-pointer = stack.pop()
-call_stack.push({ra: pc + 1, func: current_function})
-current_function = fetchFunction(pointer)
-current_function.enterBlock(0)
-jump(pointer)
-```
-
-### cast
-
-| op  | id  |
-|-----|-----|
-| 0   | 1-3 |
-| 134 |     |
-
-```
-cast <TYPE_ID>
-```
-
-弹出运算数栈栈顶元素，将该元素的类型转换为&lt;TYPE_ID&gt;指代的类型，并重新压回栈中。
-
-```js
-type = fetchTypeByID(TYPE_ID)
-operand = stack.pop()
-stack.push(Type.cast(operand, type))
-```
-
-### cpl
-
-| op  |
-|-----|
-| 0   |
-| 131 |
-
-```
-cpl
-```
-
-弹出运算数栈栈顶元素，并将按位取反后的结果压入栈中。
-
-```js
-operand = stack.pop()
-stack.push(~operand)
-```
-
-### del
-
-| op |
-|----|
-| 0  |
-| 11 |
-
-```
 del
 ```
 
-弹出操作数栈栈顶元素，销毁该元素指向的（分配在堆区）对象。
-
-```js
-pointer = stack.pop()
-deleteObject(pointer)
-```
 
 ### div
+DIVision
 
+弹出运算数栈栈顶两元素，并将相除后的结果压入栈中。
 | op  |
 |-----|
 | 0   |
-| 136 |
+| 137 |
 
 ```
 div
 ```
 
-弹出运算数栈栈顶两元素，并将相除后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs / rhs)
-```
-
 ### dot
+定位对象引用寄存器定位的对象（该对象应为结构体或联合体对象）的第`member_id`个子对象，将该子对象引用存放至对象引用寄存器中。
 
-| op  | id  |
+| op  | member_id  |
 |-----|-----|
 | 0   | 1-3 |
-| 129 |     |
+| 128 |     |
 
 ```
-dot <MEMBER_ID>
-```
-
-定位对象引用寄存器定位的对象（该对象应为结构体或联合体对象）的第&lt;MEMBER_ID&gt;个子对象，将该子对象引用存放至对象引用寄存器中。
-
-```js
-obj = object_reference_register
-object_reference_register = designateMember(obj, MEMBER_ID)
+dot integer(member_id)
 ```
 
 ### drf
+DeReFerence
+
+弹出运算数栈栈顶元素(该元素应为指针),将该元素指向的对象的引用存放至对象引用寄存器中。
 
 | op |
 |----|
@@ -477,31 +539,28 @@ object_reference_register = designateMember(obj, MEMBER_ID)
 drf
 ```
 
-弹出运算数栈栈顶元素(该元素应为指针),将该元素指向的对象的引用存在对象引用寄存器中。
-
-```js
-pointer = stack.pop()
-object_referenced_register = dereference(pointer)
-```
 
 ### dsg
+DeSiGnate
 
-| op | id  |
+将`entity_id`唯一对应的对象的引用存放至对象引用寄存器中。
+
+| op | entity_id  |
 |----|-----|
 | 0  | 1-3 |
 | 1  |     |
 
 ```
-dsg <OBJECT_ID>
+dsg string(entity_id)
+dsg integer(entity_id)
 ```
 
-将&lt;OBJECT_ID&gt;对应的唯一对象的引用存在对象引用寄存器中。
-
-```js
-object_referenced_register = current_function.fetchObjectByID(OBJECT_ID)
-```
+定位自动存储周期对象时使用数字，定位静态或线程存储周期对象和函数时使用字符串（标识符）。后者将会在链接时被替换为 ID 数值。
 
 ### dup
+DUPlicate
+
+将运算数栈栈顶元素弹出，并重新压入栈中两次。
 
 | op  |
 |-----|
@@ -512,33 +571,36 @@ object_referenced_register = current_function.fetchObjectByID(OBJECT_ID)
 dup
 ```
 
-将运算数栈栈顶元素弹出，并重新压入栈中两次。
-
-```js
-operand = stack.pop()
-stack.push(operand)
-stack.push(operand)
-```
-
 ### eb
+Enter Block
 
-| op | id  |
+进入一个块标号为`block_id`决定的新的块。
+
+| op | block_id  |
 |----|-----|
 | 0  | 1-3 |
-| 8  |     |
+| 16 |     |
 
 ```
-eb <BLOCK_ID>
+eb integer(block_id)
 ```
 
-进入一个新的 block。
+### fe
+Full Expression
 
-```js
-current_function.enterBlock(BLOCK_ID)
+标记当前正在执行的全表达式的id为`full_expr_id`。
+
+| op | full_expr_id  |
+|----|-----|
+| 0  | 1-3 |
+| 20 |     |
+
+```
+fe integer(full_expr_id)
 ```
 
 ### halt
-
+停机。
 | op  |
 |-----|
 | 0   |
@@ -548,238 +610,178 @@ current_function.enterBlock(BLOCK_ID)
 halt
 ```
 
-停机。
-
-```js
-halt()
-```
-
-### idx
-
-| op  |
-|-----|
-| 0   |
-| 128 |
-
-```
-idx
-```
-
-弹出运算数栈栈顶元素，该元素应为整数，将对象引用寄存器定位的对象（应为数组）的第右操作数个元素存放在对象引用寄存器。
-
-```js
-idx = stack.pop()
-object_reference_register = obejct_reference_register[idx]
-```
-
 ### ij
+Indirect Jump
+
+弹出操作数栈栈顶的元素，跳转到该元素指向的位置执行。
 
 | op |
 |----|
 | 0  |
-| 20 |
+| 36 |
 
 ```
 ij
 ```
 
-弹出操作数栈栈顶的元素，跳转到该元素指向的位置执行。
-
-```js
-addr = stack.pop()
-jump(addr)
-```
-
 ### j
+Jump
+
+跳转到 PC + 4 + `offset` 的位置执行。
 
 | op | offset |
 |----|--------|
 | 0  | 1-3    |
-| 16 |        |
+| 32 |        |
 
 ```
-j <OFFSET>
+j string(offset)
 ```
 
-跳转到 PC + OFFSET 的位置执行。
-
-```js
-jump(pc + 4 + OFFSET)
-```
+string部分应为当前函数中定义的 label。label 标记了跳转目标所在的位置，label 的作用域为当前函数，且应保证当前函数中 label 名称唯一。label 会在汇编时被替换为偏移量数值。
 
 ### jnt
+Jump if Not seT
+
+弹出运算数栈栈顶元素，如果栈顶元素为 0 则跳转到 PC + 4 + `offset` 的位置执行，否则继续执行下一条指令。
 
 | op | offset |
 |----|--------|
 | 0  | 1-3    |
-| 18 |        |
+| 34 |        |
 
 ```
-jnt <OFFSET>
-```
-
-弹出运算数栈栈顶元素，如果栈顶元素为 0 则跳转到 PC + OFFSET 的位置执行，否则继续执行下一条指令。
-
-```js
-flag = stack.pop()
-if (!flag) {
-    jump(pc + 4 + OFFSET)
-}
+jnt string(offset)
 ```
 
 ### jst
+Jump if SeT
+
+弹出运算数栈栈顶元素，如果栈顶元素不为 0 则跳转到 PC + `offset` 的位置执行，否则继续执行下一条指令。
 
 | op | offset |
 |----|--------|
 | 0  | 1-3    |
-| 17 |        |
+| 33 |        |
 
 ```
-jst <OFFSET>
-```
-
-弹出运算数栈栈顶元素，如果栈顶元素不为 0 则跳转到 PC + OFFSET 的位置执行，否则继续执行下一条指令。
-
-```js
-flag = stack.pop()
-if (flag) {
-    jump(pc + 4 + OFFSET)
-}
+jst string(offset)
 ```
 
 ### lb
+Leave Block
+
+自动销毁当前块中的对象，并离开（销毁）当前所在的块。
 
 | op |
 |----|
 | 0  |
-| 9  |
+| 17 |
 
 ```
 lb
 ```
 
-自动销毁当前block中的对象，并离开（销毁）当前所在的 block。
-
-```js
-current_function.leaveBlock()
-```
-
 ### ls
+Left Shift
+
+弹出运算数栈栈顶两元素，并将左操作数左移右操作数后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 140 |
+| 141 |
 
 ```
 ls
 ```
 
-弹出运算数栈栈顶两元素，并将左操作数左移右操作数后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs << rhs)
-```
-
 ### mdf
+MoDiFy
 
-| op | tag |
+弹出运算数栈栈顶元素，将该元素（值）赋值给对象引用寄存器定位的对象，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
+
+| op | inner_id |
 |----|-----|
 | 0  | 1-3 |
 | 4  |     |
 
 ```
-mdf <TAG>
+mdf integer(inner_id)
 ```
 
-弹出运算数栈栈顶元素，将该元素（值）赋值给对象引用寄存器定位的对象，并对该对象添加&lt;TAG&gt;标记
+### mdfi
+MoDiFy Initially
 
-```js
-value = stack.pop()
-obj = object_reference_register
-addTag(obj, TAG)
-obj.value = value
+弹出运算数栈栈顶元素，将该元素（值）赋值给对象引用寄存器定位的对象，不添加标记，且仅用于对象初始化。
+
+| op |
+|----|
+| 0  |
+| 6  |
+
+```
+mdfi
 ```
 
 ### mod
+MODulo
+
+弹出运算数栈栈顶两元素，并将相模后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 137 |
+| 138 |
 
 ```
 mod
 ```
 
-弹出运算数栈栈顶两元素，并将相模后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs % rhs)
-```
-
 ### mul
+MULtiply
+
+弹出运算数栈栈顶两元素，并将相乘后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 135 |
+| 136 |
 
 ```
 mul
 ```
 
-弹出运算数栈栈顶两元素，并将相乘后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs * rhs)
-```
-
 ### neg
+NEGation
+
+弹出运算数栈栈顶元素，并将取负后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 132 |
+| 134 |
 
 ```
 neg
 ```
 
-弹出运算数栈栈顶元素，并将取负后的结果压入栈中。
-
-```js
-operand = stack.pop()
-stack.push(-operand)
-```
 
 ### new
-
-| op | id  |
+在堆上新建对象数组，并将指向该对象的指针压入操作数栈中。其中，数组的长度由栈顶元素（被弹出）决定，数组元素类型由 `type_id` 决定。
+| op | type_id |
 |----|-----|
 | 0  | 1-3 |
-| 10 |     |
+| 18 |     |
 
 ```
-new <TYPE_ID>
+new type_specifier(type_id)
 ```
 
-在堆上新建对象，并将指向该对象的指针压入操作数栈中。
-
-```js
-type = fetchTypeByID(TYPE_ID)
-pointer = newObject(type)
-stack.push(pointer)
-```
+type_specifier 将会在链接时被替换为相应的 ID 数值。
 
 ### nop
-
+不做任何事情。
 | op |
 |----|
 | 0  |
@@ -789,50 +791,34 @@ stack.push(pointer)
 nop
 ```
 
-不做任何事情。
-
-```js
-// do nothing
-```
-
 ### not
+弹出运算数栈栈顶元素，并将逻辑取反后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 133 |
+| 135 |
 
 ```
 not
 ```
 
-弹出运算数栈栈顶元素，并将逻辑取反后的结果压入栈中。
-
-```js
-operand = stack.pop()
-stack.push(!operand)
-```
-
 ### or
+bitwise OR
+
+弹出运算数栈栈顶两元素，并将按位相或后的结果压入栈中。
 
 | op  |
 |-----|
 | 0   |
-| 147 |
+| 150 |
 
 ```
 or
 ```
 
-弹出运算数栈栈顶两元素，并将按位相或后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs | rhs)
-```
-
 ### pop
+弹出操作数栈栈顶元素。
 
 | op  |
 |-----|
@@ -842,94 +828,92 @@ stack.push(lhs | rhs)
 ```
 pop
 ```
+### push
+将`constant_id`对应的常量压入栈中。
 
-弹出操作数栈栈顶元素。
+| op  | constant_id |
+|-----|----|
+| 0   | 1-3|
+| 252 |    |
 
-```js
-stack.pop()
+```
+push constant(constant_id)
+```
+
+constant 会在链接时被替换为 ID 数值。
+
+### pushu
+PUSH Undefined 
+
+将未定义值（不定表示（indeterminate representation）的的值）压入栈中。
+
+| op  |
+|-----|
+| 0   |
+| 251 |
+
+```
+pushu
 ```
 
 ### read
+读取对象引用寄存器定位的对象的值，将该值压入运算数栈中，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
 
-| op | tag |
-|----|-----|
-| 0  | 1-3 |
-| 3  |     |
+| op | inner_id |
+|----|----------|
+| 0  | 1-3      |
+| 3  |          |
 
 ```
-read <TAG>
-```
-
-读取对象引用寄存器定位的对象的值，将该值压入运算数栈中，并对该对象添加&lt;TAG&gt;标记
-
-```js
-obj = object_reference_register
-addTag(obj, TAG)
-stack.push(obj.value)
+read integer(inner_id)
 ```
 
 ### ret
+RETurn
+
+销毁当前栈帧并跳转至返回地址执行。
 
 | op |
 |----|
 | 0  |
-| 21 |
+| 37 |
 
 ```
 ret
 ```
 
-销毁当前栈帧并跳转至返回地址执行。
-弹出运算数栈栈顶元素(该元素应为合法的函数指针)，保存返回地址并跳转至该元素指向的函数执行。同时自动创建该函数的栈帧并进入第一个block。
-
-```js
-caller = call_stack.pop()
-for (i = 0; i < current_function.block_num; i++) {
-    current_function.leaveBlock()
-}
-current_function = caller.func
-jump(caller.ra)
-```
 
 ### rs
-
-| op  |
-|-----|
-| 0   |
-| 141 |
-
-```
-rs
-```
+Right Shift
 
 弹出运算数栈栈顶两元素，并将左操作数右移右操作数后的结果压入栈中。
-
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs >> rhs)
-```
-
-### sl
-
 | op  |
 |-----|
 | 0   |
 | 142 |
 
 ```
-sl
+rs
 ```
 
-弹出运算数栈栈顶两元素，如果左操作数小于右操作数则将 int 类型的 1 压入运算数栈中，否则将 int 类型的 0 压入。
+### seq
+Set if EQual
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs < rhs)
+弹出运算数栈栈顶两元素，如果左操作数等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+
+| op  |
+|-----|
+| 0   |
+| 147 |
+
+```
+se q
 ```
 
-### sle
+### sl
+Set if Less than
+
+弹出运算数栈栈顶两元素，如果左操作数小于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
 
 | op  |
 |-----|
@@ -937,18 +921,13 @@ stack.push(lhs < rhs)
 | 143 |
 
 ```
-div
+sl
 ```
 
-弹出运算数栈栈顶两元素，如果左操作数小于等于右操作数则将 int 类型的 1 压入运算数栈中，否则将 int 类型的 0 压入。
+### sle
+Set if Less Equal
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs <= rhs)
-```
-
-### sg
+弹出运算数栈栈顶两元素，如果左操作数小于等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
 
 | op  |
 |-----|
@@ -956,18 +935,13 @@ stack.push(lhs <= rhs)
 | 144 |
 
 ```
-div
+sle
 ```
 
-弹出运算数栈栈顶两元素，如果左操作数大于右操作数则将 int 类型的 1 压入运算数栈中，否则将 int 类型的 0 压入。
+### sg
+Set if Great than
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs > rhs)
-```
-
-### sge
+弹出运算数栈栈顶两元素，如果左操作数大于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
 
 | op  |
 |-----|
@@ -975,37 +949,27 @@ stack.push(lhs > rhs)
 | 145 |
 
 ```
-div
+sg
 ```
 
-弹出运算数栈栈顶两元素，如果左操作数大于等于右操作数则将 int 类型的 1 压入运算数栈中，否则将 int 类型的 0 压入。
+### sge
+Set if Great Equal
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs >= rhs)
-```
-
-### sub
+弹出运算数栈栈顶两元素，如果左操作数大于等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
 
 | op  |
 |-----|
 | 0   |
-| 139 |
+| 146 |
 
 ```
-sub
+sge
 ```
 
-弹出运算数栈栈顶两元素，并将相减后的结果压入栈中。
+### sne
+Set if Not Equal
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs - rhs)
-```
-
-### xor
+弹出运算数栈栈顶两元素，如果左操作数不等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
 
 | op  |
 |-----|
@@ -1013,13 +977,59 @@ stack.push(lhs - rhs)
 | 148 |
 
 ```
-xor
+sne
 ```
+
+### sub
+SUBtraction
+
+弹出运算数栈栈顶两元素，并将相减后的结果压入栈中。
+
+| op  |
+|-----|
+| 0   |
+| 140 |
+
+```
+sub
+```
+
+### xor
+bitwise eXclusive OR
 
 弹出运算数栈栈顶两元素，并将按位异或后的结果压入栈中。
 
-```js
-rhs = stack.pop()
-lhs = stack.pop()
-stack.push(lhs ^ rhs)
+| op  |
+|-----|
+| 0   |
+| 151 |
+
+```
+xor
+```
+
+### zero
+将对象引用寄存器定位的对象清零，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
+
+| op | inner_id |
+|----|----------|
+| 0  | 1-3      |
+| 5  |          |
+
+```
+zero interger(inner_id)
+```
+
+### zeroi
+ZERO Initially
+
+将对象引用寄存器定位的对象清零，但不添加标记，且仅用于对象初始化。
+
+| op |
+|----|
+| 0  |
+| 7  |
+
+```
+zeroi
 ```

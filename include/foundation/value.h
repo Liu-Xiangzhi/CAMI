@@ -272,6 +272,7 @@ public:
     void set(size_t offset);
     void set(am::Entity* entity, size_t offset);
     void set(const ts::Type* type, am::Entity* entity, size_t offset);
+    static bool isValidOffset(const ts::Type* lvalue_type, am::Entity* entity, uint64_t offset);
 private:
 #ifndef NDEBUG
     bool checkInvariant();
