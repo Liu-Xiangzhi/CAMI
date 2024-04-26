@@ -131,6 +131,14 @@ ERROR: Undefined behavior
 注意：
 + 后文及本项目其他文档将用 `${PROJECT_ROOT}` 指代本项目根目录
 + 本项目现仅可构建在类 Unix 平台下
+
+### 对于 Arch/Manjaro Linux
+使用如下命令安装
+```shell
+sudo yay -S cami
+```
+注意，yay 会使用默认配置编译并安装 cami，若想要自定义配置需按照后文指导自行安装。
+
 ### 配置（可选的）
 修改 `${RROJECT_ROOT}/config/config.toml` 文件中的配置项以配置不同的参数。查看[这里](./config_manual.md)获取配置参数详细信息。
 

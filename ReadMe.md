@@ -7,7 +7,7 @@ See [here](./doc/index.md) for other languages.
 ## Introduction
 CAMI is an interpreter and detector based on a formal operational semantic that conforming to [C23 standard(working draft N3096)](https://www.open-std.org/JTC1/SC22/WG14/www/docs/n3096.pdf). It aims to detect potential **undefined behavior** in C program and also has the ability to detect some other common defects(but not undefined behavior), such as memory leak.
 
-CAMI executes bytecode files(referring to the [CAMI bytecode specification](./doc/en_us/cami_bytecode.md)) in text or binary form (not yet supported) as blueprints. If the bytecode file passed to is not linked, CAMI will automatically, recursively, find bytecode files depended on by that file and link them together.
+CAMI executes bytecode files(referring to the [CAMI bytecode specification](./doc/en_us/cami_bytecode.md)) in text or binary form (not yet supported) as blueprints. If the bytecode file passed is not linked, CAMI will automatically, recursively, find bytecode files depended on by that file and link them together.
 
 For more details, see [operational semantic of C](./doc/en_us/operational_semantic.md) or [interal implementation](./doc/en_us/internals.md).
 
@@ -128,6 +128,14 @@ where, the productivity metric is the geometric average of detection rate and 10
 Note:
 + let `${PROJECT_ROOT}` denote the root directory of this project, therebehind and other document.
 + it can be built only under Unix-like platform now.
+
+### For Arch/Manjaro Linux
+Run the following command to install.
+```shell
+sudo yay -S cami
+```
+Note that yay will compile and install cami using default configure. If you want to customize the configuration, you need to install by yourself following the instructions in the following text.
+
 ### Configure (optional)
 Modify the configuration items in `${RROJECT_ROOT}/config/config.toml` to configure different parameters.
 See [here](./doc/en_us/config_manual.md) for detail.
