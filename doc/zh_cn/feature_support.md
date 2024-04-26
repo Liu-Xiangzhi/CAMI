@@ -16,7 +16,7 @@
 CAMI 实现下 C 语言翻译环境字符集和运行环境字符集均为 ASCII 字符集，不支持多字节字符和宽字符。
 
 ## 实现定义行为
-本节及下节指出 CAMI 所选择的[C23标准](https://www.open-std.org/JTC1/SC22/WG14/www/docs/n3096.pdf)规定的实现定义行为和本地化行为，若以 `-` 表示，则代表 CAMI 不涉及当前行为。后文部分概念设计到 CAMI 的[内部实现](./internals.md)。
+本节及下节指出 CAMI 所选择的[C23标准](https://www.open-std.org/JTC1/SC22/WG14/www/docs/n3096.pdf)规定的实现定义行为和本地化行为，若以 `-` 表示，则代表 CAMI 不涉及当前行为。后文部分概念涉及到 CAMI 的[内部实现](./internals.md)。
 
 ### 翻译
 |行为描述|选择的行为|
