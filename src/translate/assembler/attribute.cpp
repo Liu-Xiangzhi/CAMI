@@ -52,7 +52,7 @@ void Assembler::parseAttribute()
             this->mbc->attribute.type = MBC::Type::shared_object;
         } else if (str == "EXECUTABLE") {
             this->mbc->attribute.type = MBC::Type::executable;
-        } else if (str == "ENTRY" || str == "MODULE") {
+        } else if (str == "ENTRY" || str == "MODULE_NAME") {
             if (!Token::isString(token = this->nextToken())) {
                 this->diagnostic(token->begin, "expect string");
                 continue;

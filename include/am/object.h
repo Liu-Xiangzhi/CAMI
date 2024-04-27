@@ -132,6 +132,11 @@ public:
     {
         return const_cast<Object*>(this)->topOfSameAddress();
     }
+
+    [[nodiscard]] uint64_t size() const noexcept
+    {
+        return this->effective_type.size();
+    }
 };
 
 void applyRecursively(Object& object, const std::function<void(Object&)>& func);

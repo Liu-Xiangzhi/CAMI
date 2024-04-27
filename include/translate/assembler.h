@@ -201,7 +201,8 @@ class Assembler
     std::set<std::pair<const ts::Type*, uint64_t>> parsed_constants;
 public:
     // entry
-    std::unique_ptr<UnlinkedMBC> assemble(std::string_view tbc, std::string_view name);
+    std::unique_ptr<MBC> assemble(std::string_view tbc, std::string_view name);
+    void postprocess(std::string_view name);
 private:
     // entry
     void parseSection();

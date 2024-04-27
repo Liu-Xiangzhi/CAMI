@@ -48,9 +48,13 @@ void cami_main(int argc, char* argv[])
     case Argument::SubCommand::test_translation: {
         using namespace tr;
         std::string output_name = std::string{"deasm_"}.append(argument.test_translation.file_name);
-        std::vector<std::unique_ptr<UnlinkedMBC>> mbcs;
-        mbcs.push_back(argument.test_translation.file_name | read_file | assemble);
-        Linker::link(std::move(mbcs), {MBC::Type::executable}) | deassemble | output_name;
+        auto mbc = argument.test_translation.file_name | read_file | assemble;
+        if (mbc->attribute.type == MBC::Type::object_file) {
+            std::vector<std::unique_ptr<UnlinkedMBC>> mbcs{};
+            mbcs.push_back(down_cast<std::unique_ptr<UnlinkedMBC>>(std::move(mbc)));
+            mbc = Linker::link(std::move(mbcs), {MBC::Type::executable});
+        }
+        mbc | deassemble | output_name;
     }
         return;
     default:

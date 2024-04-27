@@ -42,7 +42,6 @@ using std::operator ""sv;
  *               [static_link] | [dynamic_link]
  * version ::= 'VERSION' string
  * type ::= 'OBJECT' | 'SHARED_OBJECT' | 'EXECUTABLE' |
- *          'FIX_ADDRESS_EXECUTABLE'
  * entry ::= 'ENTRY' string
  * mod_name ::= 'MODULE_NAME' string
  * static_link ::= 'STATIC_LINK' files
@@ -70,7 +69,7 @@ using std::operator ""sv;
  *                  'debug' ':' '[' {debug_loc_info} ']'
  *                  'code' ':' {code_line} '.'
  *              '}'
- * data_segment ::= 'string_literal' | 'data' |
+ * object_segment ::= 'string_literal' | 'data' |
  *                  'bss' | 'thread_local'
  * function_segment ::= 'execute' | 'init' |
  *                      'thread_local_init'

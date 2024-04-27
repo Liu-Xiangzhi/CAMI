@@ -136,8 +136,8 @@ ValueBox pointerDiff(PointerValue& lhs, PointerValue& rhs)
                     "Two pointers on top object that are not reference same object are subtracted\n${}\n${}",
                     lhs, rhs)};
         }
-        ASSERT(lhs.getOffset() == 0 || lhs.getOffset() == lhs_obj.effective_type.size(), "invalid offset");
-        ASSERT(rhs.getOffset() == 0 || rhs.getOffset() == lhs_obj.effective_type.size(), "invalid offset");
+        ASSERT(lhs.getOffset() == 0 || lhs.getOffset() == lhs_obj.size(), "invalid offset");
+        ASSERT(rhs.getOffset() == 0 || rhs.getOffset() == lhs_obj.size(), "invalid offset");
         return ValueBox{new IntegerValue{&type_manager.getBasicType(Kind::i64),
                                          static_cast<uint64_t>(!lhs.getOffset() - !rhs.getOffset())}};
         // equivalent to (rhs.getOffset() - lhs.getOffset()) / lhs_obj_type.size()
@@ -148,7 +148,7 @@ ValueBox pointerDiff(PointerValue& lhs, PointerValue& rhs)
     }
     ASSERT(&lhs_obj.effective_type == &rhs_obj.effective_type, "two elements of the same array must have same type");
     auto ptr_diff = lhs.getAddress() - rhs.getAddress();
-    auto res = *reinterpret_cast<int64_t*>(&ptr_diff) / static_cast<int64_t>(lhs_obj.effective_type.size());
+    auto res = *reinterpret_cast<int64_t*>(&ptr_diff) / static_cast<int64_t>(lhs_obj.size());
     return ValueBox{new IntegerValue{&type_manager.getBasicType(Kind::i64), static_cast<uint64_t>(res)}};
 }
 

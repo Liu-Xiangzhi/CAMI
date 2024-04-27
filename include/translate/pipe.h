@@ -59,7 +59,7 @@ inline TBC operator|(std::istream& is, detail::ReaderTag)
     return {std::move(text), "-"};
 }
 
-inline std::unique_ptr<UnlinkedMBC> operator|(const TBC& input, detail::AssemblerTag)
+inline std::unique_ptr<MBC> operator|(const TBC& input, detail::AssemblerTag)
 {
     return Assembler{}.assemble(input.text, input.name);
 }

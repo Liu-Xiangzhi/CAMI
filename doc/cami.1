@@ -1,0 +1,58 @@
+.TH CAMI 1 "27 April 2024" "cami 0.2.0"
+.SH Name
+.TP
+CAMI \- C Abstract Machine Interpreter. A detector of undefined behavior and other common defects
+.SH Synopsis
+.TP
+cami <sub_command> [arguments]...
+.TP
+cami run <bytecode_path>
+.TP
+cami help [sub_command]
+.TP
+cami show version|banner|logo|config|ub [ub_number]
+.TP 
+cami -h|--help
+.TP
+cami -v|--version
+
+.SH DESCRIPTION
+.TP
+CAMI is an interpreter and detector based on a formal operational semantic that conforming to C23 standard(working draft N3096). It aims to detect potential\fB undefined behavior\fR in C program and also has the ability to detect some other common defects(but not undefined behavior), such as memory leak. CAMI executes bytecode files in text or binary form (not yet supported) as blueprints. If the bytecode file passed is not linked, CAMI will automatically, recursively, find bytecode files depended on by that file and link them together.
+.PP
+For more details, see github repository or /usr/shared/doc/cami/<lang>/ReadMe.md.
+
+.SH SUB_COMMANDS
+.TP
+.B run
+load bytecode and launch abstract machine.\fB bytecode_path\fR can be both text form or binary form(not supported now), and can be object file or linked file. if\fB bytecode_path\fR is object file, abstract machine launcher will automatically find those dependent files, recursively, and link then together. Abstract machine actually only accept linked bytecode. Options of abstract machine is hard-coded now in order to facilitate implementation, and it will be runtime-configurable in next few versions.
+.TP
+.B help
+display help information. One argument(sub_command) can be followed, which means to display the information specific to that sub_command.
+.TP
+.B show
+print version, banner, logo or config info of CAMI or list UB(s).\fB banner\fR is a mixture of logo, version and some other info.\fB config\fR tells configure items in `config.toml`(see ReadMe.md in repository).\fB ub_number\fR should be in range [1, 218], all UBs will be listed if ub_number is omitted.
+.TP 
+\fB-h\fR|\fB--help\fR alias of 'help'
+.TP
+\fB-v\fR|\fB--version\fR alias of 'show version'
+.SH EXAMPLES
+.TP
+cami run hello_world.tbc
+CAMI will read the './hello_world.tbc' bytecode, parse it and link it with all its dependencies(if it's not linked), and then run the linked bytecode.
+.TP
+cami help run
+CAMI will display help information specific to sub_command 'run'.
+.TP
+cami show banner
+CAMI will display banner in terminal.
+
+.SH SEE ALSO
+.TP
+github repository https://www.github.com/Liu-Xiangzhi/CAMI
+.TP
+/usr/shared/doc/cami/<lang>/ReadMe.md
+<lang> represents for different language(e.g. /usr/shared/doc/cami/en_us/ReadMe.md for English edition).
+.SH AUTHORS
+.TP
+Liu Xiangzhi <liuxiangzhi000@gmail.com>

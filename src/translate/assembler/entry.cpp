@@ -18,6 +18,7 @@
 #include <exception.h>
 #include <lib/downcast.h>
 #include <lib/format.h>
+#include <linker.h>
 #include <filesystem>
 
 using namespace cami;
@@ -25,7 +26,7 @@ using namespace tr;
 using am::spd::StaticObjectDescription;
 using std::operator ""sv;
 
-std::unique_ptr<UnlinkedMBC> Assembler::assemble(std::string_view tbc, std::string_view name)
+std::unique_ptr<MBC> Assembler::assemble(std::string_view tbc, std::string_view name)
 {
     this->reset(tbc, name);
     auto result = std::make_unique<UnlinkedMBC>();
@@ -34,21 +35,12 @@ std::unique_ptr<UnlinkedMBC> Assembler::assemble(std::string_view tbc, std::stri
         this->putBack(std::move(token));
         this->parseSection();
     }
-    if (!this->has_attribute) {
-        this->diagnostic(0, "missing attribute section");
-    }
-    if (this->has_error || this->lexer.hasError()) {
-        throw AssemblyException{};
-    }
-    this->mbc->types.insert(this->mbc->types.end(), this->parsed_types.begin(), this->parsed_types.end());
-    this->mbc->constants.insert(this->mbc->constants.end(), this->parsed_constants.begin(), this->parsed_constants.end());
-    auto bc_dir = std::filesystem::absolute(name);
-    this->mbc->source_name = bc_dir;
-    for (auto& item: this->mbc->attribute.static_links) {
-        auto link_file_path = std::filesystem::path{std::move(item)};
-        if (!link_file_path.is_absolute()) {
-            item = std::filesystem::weakly_canonical(bc_dir.parent_path() / link_file_path);
-        }
+    this->postprocess(name);
+    if (auto type = result->attribute.type; type == MBC::Type::executable || type == MBC::Type::shared_object) {
+        result->attribute.type = MBC::Type::object_file;
+        std::vector<std::unique_ptr<UnlinkedMBC>> mbcs{};
+        mbcs.push_back(down_cast<std::unique_ptr<UnlinkedMBC>>(std::move(result)));
+        return Linker::link(std::move(mbcs), {type});
     }
     return result;
 }
@@ -76,4 +68,25 @@ void Assembler::parseSection()
         return;
     }
     (this->*itr->second)();
+}
+
+void Assembler::postprocess(std::string_view name)
+{
+    if (!this->has_attribute) {
+        this->diagnostic(0, "missing attribute section");
+    }
+    if (this->has_error || this->lexer.hasError()) {
+        throw AssemblyException{};
+    }
+    this->mbc->types.insert(this->mbc->types.end(), this->parsed_types.begin(), this->parsed_types.end());
+    this->mbc->constants.insert(this->mbc->constants.end(), this->parsed_constants.begin(), this->parsed_constants.end());
+    auto bc_dir = std::filesystem::absolute(name);
+    this->mbc->source_name = bc_dir;
+    for (auto& item: this->mbc->attribute.static_links) {
+        auto link_file_path = std::filesystem::path{std::move(item)};
+        if (!link_file_path.is_absolute()) {
+            link_file_path = std::filesystem::weakly_canonical(bc_dir.parent_path() / link_file_path);
+        }
+        item = std::move(link_file_path);
+    }
 }

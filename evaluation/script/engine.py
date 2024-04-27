@@ -43,28 +43,35 @@ class Executor:
 
     def _parse_cmd(self, cmd:str) -> list[str]:
         import shlex
-        return shlex.split(re.sub(r'(?<!\$)\$\{(\w+)\}', lambda s: self._substitue_variable(s.group(1)), cmd))
+        return shlex.split(re.sub(r'.?\$\{\w+\}', lambda s: self._substitue_variable(s.group(0)), cmd))
     
     def _substitue_variable(self, var:str) -> str:
-        match var:
-            case 'eval_root':
-                return self.eval_root
-            case 'test_suite_dir':
-                return self.test_suite_dir
-            case 'out_dir':
-                return self.out_dir
-            case 'input':
-                return self.current_test_case
-            case 'local_out_dir':
-                return os.path.join(self.out_dir, re.sub(r'\s', '_',self.tool_name))
-            case 'unique':
-                import time
-                return str(time.time()).replace('.', '_')
-            case 'output':
-                input_name, _ = os.path.splitext(self.current_test_case)
-                return input_name.replace(os.sep, '-') + '.out'
-            case _:
-                raise ValueError(f'Unknown command variable "{var}"')
+        def do_substitue_variable(v: str) -> str:
+            match v:
+                case 'eval_root':
+                    return self.eval_root
+                case 'test_suite_dir':
+                    return self.test_suite_dir
+                case 'out_dir':
+                    return self.out_dir
+                case 'input':
+                    return self.current_test_case
+                case 'local_out_dir':
+                    return os.path.join(self.out_dir, re.sub(r'\s', '_',self.tool_name))
+                case 'unique':
+                    import time
+                    return str(time.time()).replace('.', '_')
+                case 'output':
+                    input_name, _ = os.path.splitext(self.current_test_case)
+                    return input_name.replace(os.sep, '-') + '.out'
+                case _:
+                    raise ValueError(f'Unknown command variable "{v}"')
+        if var[0] == '$' and var[1] == '$':
+            return var[1:]
+        if var[0] == '$':
+            return do_substitue_variable(var[2: -1])
+        return var[0] + do_substitue_variable(var[3: -1])
+        
 
 @dataclass
 class Engine:

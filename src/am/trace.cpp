@@ -107,9 +107,9 @@ void Trace::attachTag(AbstractMachine& am, Object& object, const Object::Tag& ta
 {
     const auto overlap = [](Object& a, Object& b) {
         auto l1 = a.address;
-        auto r1 = l1 + a.effective_type.size();
+        auto r1 = l1 + a.size();
         auto l2 = b.address;
-        auto r2 = l2 + b.effective_type.size();
+        auto r2 = l2 + b.size();
         return !(l1 >= r2 || r1 <= l2);
     };
     applyBottom(object.top(), [&](Object& o) {
