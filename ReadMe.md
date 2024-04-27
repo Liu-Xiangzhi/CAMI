@@ -179,7 +179,7 @@ hello world!
 │   ├── config.toml               # configuration file
 │   └── configure.py              # script that translate configure into macro defines
 ├── doc                            # documents
-│   ├── asset                     # binary files(mostly images) used at documents件，多为图片
+│   ├── asset                     # binary files(mostly images) used in documents
 │   ├── cami.1                    # Man page for CAMI
 │   ├── en_us                     # English edition
 │   ├── index.md                  # index file, nagigate to ReadMe files in different languages
