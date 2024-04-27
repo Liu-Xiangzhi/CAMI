@@ -190,6 +190,7 @@ hello world!
 │   └── configure.py              # 将配置项转换为头文件宏定义的脚本
 ├── doc                            # 文档目录，所有文档将会放在该目录下
 │   ├── asset                     # 文档中所有用到的二进制文件，多为图片
+│   ├── cami.1                    # CAMI 的 Unix 手册（Man Page）
 │   ├── en_us                     # 英文版本
 │   ├── index.md                  # 索引文件，定位到不同语言版本的 ReadMe 文档
 │   └── zh_cn                     # 简体中文版本

@@ -119,11 +119,11 @@ Avaliable attributes are as following:
 |attribute|meaning|
 |----|---|
 |VERSION|version of CAMI bytecode, set "1.0.0" now|
-|TYPE|type of this file,optional values are OBJECT (object file, i.e. unlinked file), EXECUTBLE (executable file), SHARED_OBJECT (dynamically linked file)|
+|TYPE|type of this file,optional values are OBJECT (object file, i.e. unlinked file), EXECUTBLE (executable file), SHARED_OBJECT (dynamic link file)|
 |ENRTY|name of entry function, valid for object or executable file only|
-|MODULE_NAME|moudle name of this file, valid for object or dynamically linked file only|
+|MODULE_NAME|moudle name of this file, valid for object or dynamic link file only|
 |STATIC_LINK|The other files depended on by the current file which need to be statically linked together, valid for object files.|
-|DYNAMIC_LINK|The other files depended on by the current file which need to be loaded along with this file, valid for dynamically linked file files only.(not supported yet)|
+|DYNAMIC_LINK|The other files depended on by the current file which need to be loaded along with this file, valid for dynamic link file files only.(not supported yet)|
 
 One object file cannot have both the `ENTRY` and `MODULE_NAME` attributes.
 #### Comment
@@ -156,7 +156,7 @@ type derivations are as follow:
 + pointer derivation `base_type *`
 + array derivation `base_type [n]`
 + qualify derivation `base_type qualifier`
-+ function derivation `base_type -> base_type`，`({base_type}) -> base_type`
++ function derivation `base_type -> base_type`, `({base_type}) -> base_type`
 
 where
 
@@ -207,7 +207,7 @@ This section describes functions. Filed and meaning are as follow:
 |code|function bytecode|
 
 ##### Block Array Information
-CAMI 将函数视为一系列块组成的。例如
+CAMI regards functions as a series of blocks, such as
 ```c
 void f()
 { // block 0 begin
@@ -221,35 +221,33 @@ void f()
     } // block 2 end
 } // block 0 end
 ```
-块的ID分配规则不指定，只需要块描述信息和字节码中使用的块ID对应即可。
+The rule of allocting block ID is not specified. It only needs that block IDs used in the bytecode  correspond to the correct block description information.
 
-块数组信息是一个块描述信息的数组，块描述信息在该数组中的下标由其ID决定，即 i 号块描述信息在第 i 位上（从0开始）。
-
-块描述信息目前仅包含该块内的自动存储周期的对象信息，其字段及含义如下：
-
-|字段|含义|
+Block description information consists of information of its containing automatic storage duration object. The filed and meaning are as following:
+|field|meaning|
 |----|---|
-|name|对象名称|
-|dsg_id|对象定位 ID，`dsg` 指令可用此 ID 唯一定义某一对象|
-|type|对象类型|
-|offset|对象地址相对于当前函数栈帧的偏移量|
-|init_data|对象初始化值，其含义与[对象](#对象)一节中的 value 字段相同。若缺少该字段，对象被创建后处于未初始化状态|
+|name|name of object|
+|dsg_id|designation ID, `dsg` instruction use this ID to designate certain unique object|
+|type|type of object|
+|offset|offset of the object's address relative to the current function's stack frame|
+|init_data|initial value of object, which meaning is same as `value` field in [Object](#object) section. If this field is omitted, the object remains uninitialized after creation|
 
-##### 全表达式信息
+##### Full Expression Information
+The full expression information primarily describes the "sequence after" relationships of all "trace events" within the complete expression, as well as their locations in the source code. Trace events include function calls, object modifications, object reads without non-lvalue conversions, and object deletions. Each trace event has a unique ID within the current full expression, known as the (relative to the current full expression) inner ID.
 
-全表达式信息主要描述该全表达式中所有“追踪事件”的 sequence after 关系以及其在源代码中的位置。函数调用、修改对象、非左值转换地读取对象或删除对象统称为追踪事件。每个追踪事件在当前全表达式中有唯一的 ID,称为（相对当前全表达式的）内部ID（InnerID）。
-全表达式信息的字段及其含义如下：
-|字段|含义|
+The field and meaning of full expression information are as following:
+|field|meaning|
 |----|---|
-|trace_envent_cnt|追踪事件的个数|
-|source_location|每个追踪事件在源代码中的位置|
-|sequence_after|追踪事件间的 sequence after 关系，见后文|
+|trace_envent_cnt|count of trace event|
+|source_location|The location of each trace event in the source code.|
+|sequence_after|"sequence after" relationship between trace events, see following text|
 
-sequence_after字段用一个邻接表表示追踪事件间的 sequence after 关系。若事件 A sequence After 事件 B，那么sequence_after字段的第InnerID(A)个元素（是一个数组）中应包含InnerID(B)。
+The `sequence_after` field is represented by an adjacency list, indicating the "sequence after" relationship between trace events. If event A sequences after event B, then the `InnerID(B)` should be included in the `InnerID(A)`-th element(which is an array) of `sequence_after` field.
 
-示例：
 
-对于如下C程序（不考虑语义）（共有两个全表达式，每个全表达式的追踪事件相关信息以注释的形式被标注）：
+Example:
+
+For the following C program(without considering semantic), (there're two full expressions, and the related trace event is annotated in comment)
 ```c
 int b(int, int); // line 1
 void f(int a)
@@ -258,7 +256,7 @@ void f(int a)
     b/*not a trace event, b is read by lvalue conversion*/ (/*trace event 2, call b*/ a/*trace event 0, read a*/, a/*trace event 1, read a*/); // full expression 2, trace event 2 sequence after trace event 0&1
 }
 ```
-对应的 full_expressions 字段应为
+its corresponding `full_expressions` field should be
 ```
 full_expressions: [
     {
@@ -286,10 +284,10 @@ full_expressions: [
 ]
 ```
 
-##### debug 信息
-debug 信息目前仅包含源代码行号和字节码偏移量的对应关系，其表示为一个三元组的数组。该三元组`(addr, len, line)`的含义为，将当前函数的函数字节码的起始地址视为 0，当前函数中地址处于`[addr, addr + len)`范围的函数字节码对应源代码（`file_name`字段）的第`line`行。
+##### Debug Information
+The debug information currently includes the correspondence between source code line numbers and bytecode address, represented as an array of triplets. Each triplet `(addr, len, line)` signifies that within the current function, treat the starting address of the `function bytecode` as 0, the `function bytecode` within the range `[addr, addr + len)` corresponds to line No.`line` in the source code file indicated by the `file_name` field.
 
-例如，对于如下字节码（不考虑语义）
+For example, for the following function bytecode(without considering semantic)
 ```
 add
 sub
@@ -297,19 +295,20 @@ nop
 ret
 xor
 ```
-如下debug信息及其含义是：
+the following debug info and its meaning are
 ```
-(0, 2, 2) add sub 对应源代码第 2 行
-(3, 2, 4) ret xor 对应源代码第 4 行
-          nop 不对应源代码的任意一行
+(0, 2, 2) `add` `sub` corresponding to line 2 of source code
+(3, 2, 4) `ret` `xor` corresponding to line 4 of source code
+          `nop` do not corresponding to any lines of source code
 ```
 
 ## Binary Form
 TBD
 
 ## Linking
-CAMI 支持将一个或多个对象文件链接为一个对象文件或可执行文件或动态链接文件。因此一个对象文件中可以使用其他文件定义的符号且不需要提前声明。
-将多个对象文件链接到一个对象文件不涉及重定向（字符串字面量除外），任意若干个对象文件都可以链接在一起。而将对象文件链接到可执行文件或动态链接文件则需要保证所有对象文件间不存在符号冲突且不引用未定义的符号。链接成功后，所有的符号（部分地址常量除外）都将被替换为数值。
+CAMI supports linking one or more object files into a single object file, executable file, or dynamic link library. Therefore, an object file can use symbols defined in other files without forward declaration.
+
+Linking multiple object files into one object file does not involve relocation(except for string literals), and any number of object files can be linked together. However, linking object files into an executable file or dynamic link file requires ensuring that there are no symbol conflicts between these object files and that they do not reference undefined symbols. After successful linking, all symbols (excluding certain addressed constants) will be replaced with numeric values.
 
 ## List of Instructions
 
@@ -379,12 +378,12 @@ CAMI 支持将一个或多个对象文件链接为一个对象文件或可执行
 + [halt](#halt)
 
 ## Description of Instructions
-下文指令描述中不包含检测逻辑和形式化表述。关于指令语义的形式化描述，参见[C 语言操作语义](./operational_semantic.md)。
+The decriptions of instructions in the following text do not include detection logic or formal definitions. See [operational semantic of C](./operational_semantic.md) for the formal definitions of semantic of instructions.
 
 ### Example
-指令含义解释
+Description of instruction
 
-指令编码（以字节为单位）
+Encoding(in byte)
 
 | op    | tag |
 |-------|-----|
@@ -395,14 +394,15 @@ CAMI 支持将一个或多个对象文件链接为一个对象文件或可执行
 syntax
 op info(tag)
 ```
-语法中被括起来的内容说明了括号前的部分被编码到指令的哪个部分，上例中，info会被编码到 tag 中。
+The content enclosed in parentheses in syntax indicates the part preceding the parentheses is encoded into which part of the instruction. In the example provided, "info" will be encoded into the "tag" part.
 
-额外说明（可选的）
+extra explanations(optional)
 
 ### add
 ADDition
 
-弹出运算数栈栈顶两元素，并将相加后的结果压入栈中。
+Pop top two elements from operand stack, add them together, and push the result back onto the stack.
+
 | op  |
 |-----|
 | 0   |
@@ -415,7 +415,7 @@ add
 ### addr
 ADDRess
 
-获取指向对象定位寄存器定位的对象的指针，并将其压入栈中。
+Retrieve the pointer to the object designated by the object designation register, and push it onto the stack.
 
 | op  |
 |-----|
@@ -429,7 +429,8 @@ addr
 ### and
 bitwise AND
 
-弹出运算数栈栈顶两元素，并将按位相与后的结果压入栈中。
+Pop top two elements from operand stack, bitwise and them together, and push the result back onto the stack.
+
 | op  |
 |-----|
 | 0   |
@@ -440,7 +441,7 @@ and
 ```
 
 ### arrow
-弹出运算数栈栈顶元素(该元素应指向结构体或联合体的指针)，定位该指针指向的对象的第`member_id`个子对象，将该子对象的对象元数据存放至对象定位寄存器中。
+Pop the top element from the operand stack (which should be a pointer to a struct or union), desigante the `member_id`-th subobject of the object pointed by this pointer, and store the object metadata of this subobject to object designation register.
 
 | op  | member_id  |
 |-----|-----|
@@ -452,7 +453,8 @@ arrow integer(member_id)
 ```
 
 ### call
-弹出运算数栈栈顶元素(该元素应为合法的函数指针)，保存返回地址并跳转至该元素指向的函数执行。同时自动创建该函数的栈帧并进入第一个block。
+Pop the top element from the operand stack (which should be a valid function pointer), save the return address, jump to the function pointed to by this element, and automatically create the stack frame for this function while entering its first block(block 0).
+
 | op |
 |----|
 | 0  |
@@ -463,7 +465,7 @@ call
 ```
 
 ### cast
-弹出运算数栈栈顶元素，将该元素的类型转换为`type_id`指代的类型，并重新压回栈中。
+Pop the top element from the operand stack, cast it to type that is indicated by `type_id`, and push it back onto the stack.
 
 | op  | type_id  |
 |-----|-----|
@@ -474,12 +476,13 @@ call
 cast type_specifier(type_id)
 ```
 
-运算数类型和`type_id`指代的类型均应为标量类型。
+the type of operand and that indicated by `type_id` must be scalar type.
 
 ### cpl
 ComPLement
 
-弹出运算数栈栈顶元素，并将按位取反后的结果压入栈中。
+Pop the top element from the operand stack and push the complement of the result onto the stack.
+
 | op  |
 |-----|
 | 0   |
@@ -492,7 +495,8 @@ cpl
 ### del
 DELete
 
-弹出操作数栈栈顶元素，销毁该元素指向的（分配在堆区）对象。
+Pop the top element from the operand stack and delete the object(allocated at heap) pointed by that element.
+
 | op |
 |----|
 | 0  |
@@ -506,7 +510,8 @@ del
 ### div
 DIVision
 
-弹出运算数栈栈顶两元素，并将相除后的结果压入栈中。
+Pop the top two elements from the operand stack, divide them, and push the result onto the stack.
+
 | op  |
 |-----|
 | 0   |
@@ -517,7 +522,7 @@ div
 ```
 
 ### dot
-定位对象定位寄存器定位的对象（该对象应为结构体或联合体对象）的第`member_id`个子对象，将该子对象的对象元数据存放至对象定位寄存器中。
+Desigante the `member_id`-th subobject of the object designated by object designation register, and store the object metadata of this subobject to object designation register.
 
 | op  | member_id  |
 |-----|-----|
@@ -531,7 +536,7 @@ dot integer(member_id)
 ### drf
 DeReFerence
 
-弹出运算数栈栈顶元素(该元素应为指针),将该元素指向的对象的对象元数据存放至对象定位寄存器中。
+Pop the top element(which should be a pointer) from the operand stack, and store the object metadata of object pointed by this pointer to object designation reigister.
 
 | op |
 |----|
@@ -546,7 +551,7 @@ drf
 ### dsg
 DeSiGnate
 
-将`entity_id`唯一对应的对象元数据存放至对象定位寄存器中。
+Store the object metadate of the unique object corresponding to `entity_id` to object designation register.
 
 | op | entity_id  |
 |----|-----|
@@ -557,13 +562,12 @@ DeSiGnate
 dsg string(entity_id)
 dsg integer(entity_id)
 ```
-
-定位自动存储周期对象时使用数字，定位静态或线程存储周期对象和函数时使用字符串（标识符）。后者将会在链接时被替换为 ID 数值。
+When designating automatic storage duration objects, numeric values are used, whereas for static or thread storage duration objects and functions, strings (identifiers) are used. The latter will be replaced with numeric ID values during linking.
 
 ### dup
 DUPlicate
 
-将运算数栈栈顶元素弹出，并重新压入栈中两次。
+Pop the top element from operand stack and push it back twice.
 
 | op  |
 |-----|
@@ -577,7 +581,7 @@ dup
 ### eb
 Enter Block
 
-进入一个块ID为`block_id`的新的块。
+Enter a new block which ID is `block_id`.
 
 | op | block_id  |
 |----|-----|
@@ -591,7 +595,7 @@ eb integer(block_id)
 ### fe
 Full Expression
 
-标记当前正在执行的全表达式的id为`full_expr_id`。
+Mark the ID of the executing full expression as `full_expr_id`.
 
 | op | full_expr_id  |
 |----|-----|
@@ -603,7 +607,8 @@ fe integer(full_expr_id)
 ```
 
 ### halt
-停机。
+Halt
+
 | op  |
 |-----|
 | 0   |
@@ -616,7 +621,7 @@ halt
 ### ij
 Indirect Jump
 
-弹出操作数栈栈顶的元素，跳转到该元素指向的位置执行。
+Pop the top element from operand stack, jump to the position indicated by this element.
 
 | op |
 |----|
@@ -630,7 +635,7 @@ ij
 ### j
 Jump
 
-跳转到 PC + 4 + `offset` 的位置执行。
+Jump to PC + 4 + `offset`.
 
 | op | offset |
 |----|--------|
@@ -641,12 +646,12 @@ Jump
 j string(offset)
 ```
 
-string部分应为当前函数中定义的 label。label 标记了跳转目标所在的位置，label 的作用域为当前函数，且应保证当前函数中 label 名称唯一。label 会在汇编时被替换为偏移量数值。
+The string part should be a label defined within the current function. Labels mark the position of jump targets within the current function, and their scope is current function. It should be ensured that label names are unique within the current function. Labels will be replaced with offset during assembly.
 
 ### jnt
 Jump if Not seT
 
-弹出运算数栈栈顶元素，如果栈顶元素为 0 则跳转到 PC + 4 + `offset` 的位置执行，否则继续执行下一条指令。
+Pop the top element from operand stack, jump to PC + 4 + `offset` if the element is 0.
 
 | op | offset |
 |----|--------|
@@ -660,7 +665,7 @@ jnt string(offset)
 ### jst
 Jump if SeT
 
-弹出运算数栈栈顶元素，如果栈顶元素不为 0 则跳转到 PC + `offset` 的位置执行，否则继续执行下一条指令。
+Pop the top element from operand stack, jump to PC + 4 + `offset` if the element is not 0.
 
 | op | offset |
 |----|--------|
@@ -674,7 +679,7 @@ jst string(offset)
 ### lb
 Leave Block
 
-自动销毁当前块中的对象，并离开（销毁）当前所在的块。
+Automatically destory all object within current block and leave(and destory) current block.
 
 | op |
 |----|
@@ -688,7 +693,7 @@ lb
 ### ls
 Left Shift
 
-弹出运算数栈栈顶两元素，并将左操作数左移右操作数后的结果压入栈中。
+Pop the top two elements from the operand stack, left-shift the left operand by the number of bits specified by the right operand, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -702,7 +707,7 @@ ls
 ### mdf
 MoDiFy
 
-弹出运算数栈栈顶元素，将该元素（值）赋值给对象定位寄存器定位的对象，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
+Pop the top element from the operand stack, assign the value of this element to the object designated by object designation register, and attach the specified tag to this object. The tag content should be `(full_expr_exec_id, full_expr_id, inner_id)`.
 
 | op | inner_id |
 |----|-----|
@@ -716,7 +721,7 @@ mdf integer(inner_id)
 ### mdfi
 MoDiFy Initially
 
-弹出运算数栈栈顶元素，将该元素（值）赋值给对象定位寄存器定位的对象，不添加标记，且仅用于对象初始化。
+Pop the top element from the operand stack, assign the value of this element to the object designated by object designation register, without attaching tag. This instruction is used to initialize object only.
 
 | op |
 |----|
@@ -730,7 +735,7 @@ mdfi
 ### mod
 MODulo
 
-弹出运算数栈栈顶两元素，并将相模后的结果压入栈中。
+Pop the top two elements from the operand stack, modulo them, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -744,7 +749,7 @@ mod
 ### mul
 MULtiply
 
-弹出运算数栈栈顶两元素，并将相乘后的结果压入栈中。
+Pop the top two elements from the operand stack, muliply them together, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -758,7 +763,7 @@ mul
 ### neg
 NEGation
 
-弹出运算数栈栈顶元素，并将取负后的结果压入栈中。
+Pop the top element from the operand stack and push the negation of the result onto the stack.
 
 | op  |
 |-----|
@@ -771,7 +776,7 @@ neg
 
 
 ### new
-在堆上新建对象数组，并将指向该对象的指针压入操作数栈中。其中，数组的长度由栈顶元素（被弹出）决定，数组元素类型由 `type_id` 决定。
+Create a new array of objects on the heap, with the length determined by the top element of the operand stack (which is popped), and the type of elements determined by `type_id`. Push a pointer to the first element of this array onto the operand stack.
 | op | type_id |
 |----|-----|
 | 0  | 1-3 |
@@ -781,10 +786,11 @@ neg
 new type_specifier(type_id)
 ```
 
-type_specifier 将会在链接时被替换为相应的 ID 数值。
+type_specifier will be replaced with corresponding ID value during linking.
 
 ### nop
-不做任何事情。
+Do nothing.
+
 | op |
 |----|
 | 0  |
@@ -795,7 +801,8 @@ nop
 ```
 
 ### not
-弹出运算数栈栈顶元素，并将逻辑取反后的结果压入栈中。
+
+Pop the top element from the operand stack and push the logical negation of the result onto the stack.
 
 | op  |
 |-----|
@@ -809,7 +816,7 @@ not
 ### or
 bitwise OR
 
-弹出运算数栈栈顶两元素，并将按位相或后的结果压入栈中。
+Pop the top two elements from the operand stack, bitwise or them, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -821,7 +828,7 @@ or
 ```
 
 ### pop
-弹出操作数栈栈顶元素。
+Pop the top element from operand stack.
 
 | op  |
 |-----|
@@ -831,8 +838,9 @@ or
 ```
 pop
 ```
+
 ### push
-将`constant_id`对应的常量压入栈中。
+Push the constant correspoing to `constant_id` onto stack.
 
 | op  | constant_id |
 |-----|----|
@@ -843,12 +851,12 @@ pop
 push constant(constant_id)
 ```
 
-constant 会在链接时被替换为 ID 数值。
+constant will be replaced with ID value during linking.
 
 ### pushu
 PUSH Undefined 
 
-将未定义值（不定表示（indeterminate representation）的的值）压入栈中。
+Push indeterminate representation value onto stack.
 
 | op  |
 |-----|
@@ -860,7 +868,7 @@ pushu
 ```
 
 ### read
-读取对象定位寄存器定位的对象的值，将该值压入运算数栈中，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
+Read the value of object designated by object designation register, attach the specified tag to this object, and push the result onto stack.The tag content should be `(full_expr_exec_id, full_expr_id, inner_id)`.
 
 | op | inner_id |
 |----|----------|
@@ -874,7 +882,7 @@ read integer(inner_id)
 ### ret
 RETurn
 
-销毁当前栈帧并跳转至返回地址执行。
+Destory current frame and jump to return address.
 
 | op |
 |----|
@@ -889,7 +897,8 @@ ret
 ### rs
 Right Shift
 
-弹出运算数栈栈顶两元素，并将左操作数右移右操作数后的结果压入栈中。
+Pop the top two elements from the operand stack, right-shift the left operand by the number of bits specified by the right operand, and push the result onto the stack.
+
 | op  |
 |-----|
 | 0   |
@@ -902,7 +911,7 @@ rs
 ### seq
 Set if EQual
 
-弹出运算数栈栈顶两元素，如果左操作数等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand equals to the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -916,7 +925,7 @@ se q
 ### sl
 Set if Less than
 
-弹出运算数栈栈顶两元素，如果左操作数小于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand is less than the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -930,7 +939,7 @@ sl
 ### sle
 Set if Less Equal
 
-弹出运算数栈栈顶两元素，如果左操作数小于等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand is less equal than the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -944,7 +953,7 @@ sle
 ### sg
 Set if Great than
 
-弹出运算数栈栈顶两元素，如果左操作数大于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand is great than the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -958,7 +967,7 @@ sg
 ### sge
 Set if Great Equal
 
-弹出运算数栈栈顶两元素，如果左操作数大于等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand is great equal than the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -972,7 +981,7 @@ sge
 ### sne
 Set if Not Equal
 
-弹出运算数栈栈顶两元素，如果左操作数不等于右操作数则将 i32 类型的 1 压入运算数栈中，否则将 i32 类型的 0 压入。
+Pop the top two elements from the operand stack, push value x of type i32 onto the stack, where x is 1 if the left operand does not equal to the right operand, otherwise 0.
 
 | op  |
 |-----|
@@ -986,7 +995,7 @@ sne
 ### sub
 SUBtraction
 
-弹出运算数栈栈顶两元素，并将相减后的结果压入栈中。
+Pop the top two elements from the operand stack, subtracte them, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -1000,7 +1009,8 @@ sub
 ### xor
 bitwise eXclusive OR
 
-弹出运算数栈栈顶两元素，并将按位异或后的结果压入栈中。
+
+Pop the top two elements from the operand stack, bitwise xor them, and push the result onto the stack.
 
 | op  |
 |-----|
@@ -1012,7 +1022,7 @@ xor
 ```
 
 ### zero
-将对象定位寄存器定位的对象清零，并对该对象添加标记。标记内容为`(full_expression_exec_id, full_expression_id, inner_id)`。
+Clear the object designated by object designation register and attach the specified tag to this object. The tag content should be `(full_expr_exec_id, full_expr_id, inner_id)`.
 
 | op | inner_id |
 |----|----------|
@@ -1026,7 +1036,7 @@ zero interger(inner_id)
 ### zeroi
 ZERO Initially
 
-将对象定位寄存器定位的对象清零，但不添加标记，且仅用于对象初始化。
+Clear the object designated by object designation register without attaching tag. This instruction is only used to initialize object.
 
 | op |
 |----|

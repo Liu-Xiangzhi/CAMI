@@ -1,5 +1,5 @@
 # <center>CAMI</center>
-![cami show banner](doc/asset/banner.png)
+![cami show banner](./doc/asset/banner.png)
 C Abstract Machine Interpreter, also an examiner of your C programs.
 
 See [here](./doc/index.md) for other languages.
@@ -47,7 +47,7 @@ Stuck state: in function main, expression <loc p> = (int *) (<ptr x> + 4LLU)
 Stuck subexpression: <ptr x> + 4LLU
 ERROR: Undefined behavior
 ```
-In terms of expressive detection, CAMI has **SOUND and COMPLETE** detection ability(under our semantic), which is far ahead of similar software(see[Detection Ability Evaluation](#detection-ability-evaluation)). Even for some tricky program that conatians undefined behavior, such as [ub09/4.c](/evaluation/test_suite/positive/ub09/4.c), CAMI can singled out the "villain" at a glance. In contrast, the other detection tools we selected were powerless against it.
+In terms of expressive detection, CAMI has **SOUND and COMPLETE** detection ability(under our semantic), which is far ahead of similar software(see[Detection Ability Evaluation](#detection-ability-evaluation)). Even for some tricky program that conatians undefined behavior, such as [ub09/4.c](./evaluation/test_suite/positive/ub09/4.c), CAMI can singled out the "villain" at a glance. In contrast, the other detection tools we selected were powerless against it.
 
 However, you can't have your cake and eat it too. CAMI naturally has its flaws, with the most significant issue being its execution efficiency. For compute-intensive programs, CAMI's execution efficiency is approximately 1 to 1.5 orders of magnitude lower than that of equivalent logic CPython programs. To address this deficiency, we plan to adopt JIT technology or hardware acceleration techniques. Additionally, we currently lack a compiler from C language source code to CAMI bytecode, which is also a problem we need to address in our next steps.
 
@@ -72,7 +72,7 @@ Considering to the workload, we do not support those features now (standard liba
 
 Due to certain inconsistencies in the C standard regarding the effective type of allocated storage duration objects and other semantic rules (such as pointer arithmetic), we modified the behavior of `malloc` to resemble the behavior of the `new` operator in C++/Java.
 
-For more infomation of feature supporting, implementation-defined behavior and locale-specified behavior, see [feature support document](./doc/en_us/feature_support.md).
+For more infomation of feature supporting, implementation-defined behavior and locale-specific behavior, see [feature support document](./doc/en_us/feature_support.md).
 
 ### Detection Target
 Our detection target is undefined behaviors that cannot be completely detected at compile time. Meanwhile, due to some unsupported feature, we eliminated UB 5(data race), 38(access subobject of atomic object), 65(restrict related), 66(restrict related), 72(VLA related). The remaining undefined behaviors are as follows:
@@ -111,15 +111,8 @@ where the meaning of `M @N` is that undefined behavior M is the subset of undefi
 
 ### Detection Ability Evaluation
 To compare the detection ability among different detection softwares, we constructed 178 test cases and divided them into two suite: positive and negative. The former is to evaluate detection rate, while the latter is to evaluate false positive rate. Evaluation results are as following:
-<div style="display: flex;">
-    <div style="flex: 1;">
-        <img src="./doc/asset/evaluation_result_positive_suite.png" style="vertical-align: top;">
-    </div>
-    <div style="flex: 1;">
-        <img src="./doc/asset/evaluation_result_negative_suite.png" style="vertical-align: top;">
-    </div>
-</div>
-
+![](./doc/asset/evaluation_result_positive_suite.png)
+![](./doc/asset/evaluation_result_negative_suite.png)
 ![](./doc/asset/evaluation_result_statistic.png)
 
 where, the productivity metric is the geometric average of detection rate and 100% minus false-positive and the best and worst values in statistic for each indicator are highlighted in blue and red, respectively.
@@ -187,6 +180,7 @@ hello world!
 │   └── configure.py              # script that translate configure into macro defines
 ├── doc                            # documents
 │   ├── asset                     # binary files(mostly images) used at documents件，多为图片
+│   ├── cami.1                    # Man page for CAMI
 │   ├── en_us                     # English edition
 │   ├── index.md                  # index file, nagigate to ReadMe files in different languages
 │   └── zh_cn                     # Chinese(simplified) edition
