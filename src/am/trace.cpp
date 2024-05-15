@@ -47,6 +47,19 @@ TraceContext& findShortestCommonAncestor(TraceContext& _a, TraceContext& _b)
         b = &b->caller;
     }
 }
+
+void eraseSequenceAfterCoexistingTag(AbstractMachine& am, lib::List<Object::Tag>& tags, const Object::Tag& tag)
+{
+    auto _itr = tags.begin();
+    auto itr = ++tags.begin();
+    while (itr != tags.end()) {
+        if (!Trace::isIndeterminatelySequenced(am, tag, *itr)){
+            itr = tags.erase_after(_itr);
+        } else {
+            _itr = itr++;
+        }
+    }
+}
 } // anonymous namespace
 
 bool Trace::isIndeterminatelySequenced(AbstractMachine& am, const Object::Tag& new_, const Object::Tag& old)
@@ -84,11 +97,16 @@ void Trace::updateTag(AbstractMachine& am, Object& obj, const Object::Tag& tag)
         obj.tags.insert_head(tag);
         return;
     }
-    if (tag.isCoexisting() && obj.tags.head().isCoexisting()) {
-        obj.tags.erase_if([&](const Object::Tag& t) {
-            return !Trace::isIndeterminatelySequenced(am, tag, t);
-        });
-        obj.tags.insert_head(tag);
+    if (tag.isCoexisting()) {
+        auto& mutexTag = obj.tags.head();
+        if (Trace::isIndeterminatelySequenced(am, tag, mutexTag)) {
+            Formatter formatter{&am};
+            throw UBException{{UB::refer_del_obj, UB::use_ptr_value_which_ref_del_obj, UB::unsequenced_access}, lib::format(
+                    "Object `${name}` is unsequenced accessed(read/modify/delete/indeterminatelize)\n${}\n${}",
+                    obj, formatter.tag(tag), formatter.tag(mutexTag))};
+        }
+        eraseSequenceAfterCoexistingTag(am, obj.tags, tag);
+        obj.tags.insert_after(obj.tags.begin(), tag);
         return;
     }
     for (const auto& item: obj.tags) {
