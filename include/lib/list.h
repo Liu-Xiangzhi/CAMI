@@ -44,6 +44,12 @@ struct NodeHeader
         this->next = node;
     }
 
+    static void insertAfter(NodeHeader* base, NodeHeader* node) noexcept
+    {
+        node->next = base->next;
+        base->next = node;
+    }
+
     void eraseHead()
     {
         ASSERT(!this->empty(), "erase empty list");
@@ -164,6 +170,16 @@ public:
         this->clear();
     }
 
+    [[nodiscard]] iterator start() noexcept // NOLINT
+    {
+        return iterator{&this->header};
+    }
+
+    [[nodiscard]] iterator start() const noexcept // NOLINT
+    {
+        return iterator{&this->header};
+    }
+
     [[nodiscard]] iterator begin() noexcept // NOLINT
     {
         return iterator{this->header.next};
@@ -230,6 +246,11 @@ public:
         delete node;
     }
 
+    void insert_after(iterator itr, const T& element)
+    {
+        detail::NodeHeader::insertAfter(itr.node, new detail::Node<T>{element});
+    }
+
     [[nodiscard]] bool empty() const noexcept
     {
         return this->header.empty();
@@ -242,21 +263,15 @@ public:
         }
     }
 
-    template<typename T_pred>
-    void erase_if(const T_pred& pred)
+    iterator erase_after(iterator itr)
     {
-        auto* n = &this->header;
-        while (n->next != nullptr) {
-            if (pred(static_cast<detail::Node<T>*>(n->next)->element)) {
-                auto node = static_cast<detail::Node<T>*>(n->next);
-                detail::NodeHeader::eraseAfter(n);
-                delete node;
-                if (n->next == nullptr) {
-                    break;
-                }
-            }
-            n = n->next;
-        }
+        auto head = itr.node;
+        auto node = static_cast<detail::Node<T>*>(head->next);
+        ++itr;
+        ++itr;
+        detail::NodeHeader::eraseAfter(head);
+        delete node;
+        return itr;
     }
 };
 
