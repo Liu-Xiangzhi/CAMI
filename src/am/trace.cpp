@@ -51,9 +51,12 @@ TraceContext& findShortestCommonAncestor(TraceContext& _a, TraceContext& _b)
 void eraseSequenceAfterCoexistingTag(AbstractMachine& am, lib::List<Object::Tag>& tags, const Object::Tag& tag)
 {
     auto _itr = tags.begin();
-    for (auto itr = tags.begin(); (_itr = itr++, itr) != tags.end();) {
+    auto itr = ++tags.begin();
+    while (itr != tags.end()) {
         if (!Trace::isIndeterminatelySequenced(am, tag, *itr)){
             itr = tags.erase_after(_itr);
+        } else {
+            _itr = itr++;
         }
     }
 }
