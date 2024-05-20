@@ -59,7 +59,7 @@ def parser_cli(argv: list[str]):
                 argument.parallel = int(arg)
             case '--verbose':
                 argument.verbose = True
-                if arg is not None:
+                if arg is not None and arg != '':
                     argument.verbose_output_path = os.path.abspath(arg)
             case '-s' | '--save':
                 argument.result_save_path = os.path.abspath(arg)

@@ -104,6 +104,7 @@ python evaluation/script/main.py -v evaluation/out/result.json --verbose=
 |`local_out_dir`|在`${out_dir}`目录下当前检测软件独占的输出目录，即`${out_dir}/<tool_name>/`|
 |`unique`|随机产生的独一无二的字符串，当前生产逻辑为 `str(time.time()).replace('.', '_')`|
 |`output`|根据当前测试用例名称生成的独一无二的字符串，当前生成逻辑为 `input_name.replace(os.sep, '-') + '.out'`|
+|`shell_ext`|当前操作系统中默认脚本文件的后缀名（Windows 中为`bat`，类 Unix 系统在为`sh`）|
 
 `commands`对象下的`interrupt_on_error`字段表示该命令是否可失败。`interrupt_on_error`为假时无论当前指令是否执行成功都会执行下一条指令，反之，若当前指令执行失败则终止当前测试样例的运行。
 
