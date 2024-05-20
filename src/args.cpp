@@ -192,9 +192,9 @@ void CommandLineParser::show()
 
 void CommandLineParser::config()
 {
-#define STR_(s) #s
-#define STR(s) STR_(s)
-#define DEFINED(cami_macro) (sizeof STR(cami_macro) == 0)
+#define STR_(...) "" #__VA_ARGS__
+#define STR(...) STR_(__VA_ARGS__)
+#define DEFINED(cami_macro) (sizeof STR(cami_macro) == 1)
     const auto readable = [](uint64_t value) -> std::string {
         const char unit[] = {' ', 'K', 'M', 'G', 'T', 'P', 'E'};
         int i;

@@ -102,8 +102,7 @@ private:
 
     // only used by `dummy`
     TraceContext() : caller(*this), func_id(-1), ref_cnt(INT32_MAX),
-                     call_point{.exec_id=UINT64_MAX, .full_expr_id = UINT32_MAX,
-                             .inner_id = InnerID::newMutualExclude(INT32_MAX)} {}
+                     call_point{UINT64_MAX, UINT32_MAX, InnerID::newMutualExclude(INT32_MAX)} {}
 
 public:
     static TraceContext dummy;

@@ -45,6 +45,7 @@ function(set_target_info)
     elseif (WIN32)
         add_compile_definitions(CAMI_TARGET_INFO_WINDOWS)
         add_compile_definitions(NOMINMAX _USE_MATH_DEFINES)
+        add_compile_options(/wd5051 /wd4455 /wd4819) # suppress verbose and useless msvc warning
     endif ()
 endfunction()
 

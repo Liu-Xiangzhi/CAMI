@@ -18,6 +18,7 @@
 #ifdef CAMI_TARGET_INFO_UNIX_LIKE
 #include <unistd.h>
 #else
+#include <windows.h>
 #endif
 
 using namespace cami;
@@ -40,6 +41,9 @@ const size_t ts::detail::page_size = []() -> size_t {
     }
     return page_size;
 #else
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return si.dwPageSize;
 #endif
 }();
 MemoryManager ts::type_manager;

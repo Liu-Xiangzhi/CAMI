@@ -128,14 +128,8 @@ MBC::Attribute linkAttribute(lib::Slice<std::unique_ptr<UnlinkedMBC>> mbcs, MBC:
     if (link_type != MBC::Type::object_file && module_or_entry_name.empty()) {
         throw MissingModuleOrEntryNameException{};
     }
-    return {
-            .version = mbcs[0]->attribute.version,
-            .type = link_type,
-            .module_or_entry_name = std::move(module_or_entry_name),
-            .entry = nullptr,
-            .static_links = mergeStaticLinks(mbcs),
-            .dynamic_links = mergeDynamicLinks(mbcs),
-    };
+    return {mbcs[0]->attribute.version, link_type, std::move(module_or_entry_name),
+            nullptr, mergeStaticLinks(mbcs), mergeDynamicLinks(mbcs)};
 }
 
 struct ObjectLayout
@@ -258,11 +252,9 @@ void insertBootFunction(UnlinkedMBC& unlinked_mbc)
     func->code.push_back((init_func_cnt >> 8) & 0xff);
     func->code.push_back((init_func_cnt >> 16) & 0xff);
     func->code.push_back(static_cast<uint8_t>(Opcode::halt));
-    UnlinkedMBC::FullExprInfo full_expr_info{
-            .trace_event_cnt = init_func_cnt + 1,
-            .sequence_after_graph = std::vector<uint8_t>(lib::roundUpDiv((init_func_cnt + 1) * (init_func_cnt + 1), 8)),
-            .source_location = std::vector<std::pair<uint64_t, uint64_t>>(init_func_cnt + 1),
-    };
+    UnlinkedMBC::FullExprInfo full_expr_info{init_func_cnt + 1,
+            std::vector<uint8_t>(lib::roundUpDiv((init_func_cnt + 1) * (init_func_cnt + 1), 8)),
+            std::vector<std::pair<uint64_t, uint64_t>>(init_func_cnt + 1)};
     for (size_t i = 0; i < init_func_cnt + 1; ++i) {
         for (size_t j = 0; j < i; ++j) {
             auto idx = i * (init_func_cnt + 1) + j;

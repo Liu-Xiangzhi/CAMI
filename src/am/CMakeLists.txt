@@ -9,3 +9,6 @@ cami_library(am STATIC am.cpp fetch_decode.cpp execute.cpp vmm.cpp object.cpp ob
     heap_allocator.cpp trace.cpp ub.cpp formatter.cpp ${eval_src} ${header})
 target_include_directories(am PRIVATE "${CMAKE_SOURCE_DIR}/include/am")
 target_link_libraries(am PUBLIC foundation)
+if (WIN32)
+    target_link_libraries(am PRIVATE Shlwapi)
+endif ()

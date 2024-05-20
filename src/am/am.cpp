@@ -173,7 +173,7 @@ Global AbstractMachine::initStaticInfo(tr::LinkedMBC& bytecode)
 uint64_t AbstractMachine::countPermanentObject(tr::LinkedMBC& bytecode)
 {
     return VirtualMemory::MMIO_OBJECT_NUM + std::accumulate(
-            bytecode.static_objects.begin(), bytecode.static_objects.end(), 0,
+            bytecode.static_objects.begin(), bytecode.static_objects.end(), 0ULL,
             [](uint64_t val, const StaticObjectDescription& obj) {
                 return val + ts::countCorrespondingObjectFamily(*obj.type);
             });

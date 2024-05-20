@@ -36,10 +36,12 @@ constexpr uint64_t log2(uint64_t val)
     ASSERT(isTwosPower(val) && val > 0, "this function only accepts positive values which are 2's power");
 #if defined(__GNUC__) || defined(__clang__)
     return 63 - __builtin_clzll(val);
-#elif defined(_MSC_VER)
-    uint64_t res;
-    _BitScanReverse64(&res, val);
-    return res - 1;
+// `_BitScanReverse64` cannot be used under a constexpr context, so just give up optimize in Windows
+//
+// #elif defined(_MSC_VER)
+//     unsigned long res;
+//     _BitScanReverse64(&res, val);
+//     return res - 1;
 #else
     for (size_t i = 0; i < 64; ++i) {
         if (val & 1) {
@@ -47,6 +49,8 @@ constexpr uint64_t log2(uint64_t val)
         }
         val >>= 1;
     }
+    ASSERT(false, "cannot reach here");
+    return 0;
 #endif
 }
 
