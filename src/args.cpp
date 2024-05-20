@@ -22,7 +22,7 @@
 #include <config.h>
 #include <am/ub.h>
 
-#define VERSION "0.2.0"
+#define VERSION "0.2.1"
 
 using namespace cami;
 namespace {
