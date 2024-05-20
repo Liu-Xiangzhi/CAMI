@@ -223,108 +223,144 @@ struct DefaultToString<unsigned char>
 };
 
 template<>
-struct DefaultToString<int16_t>
+struct DefaultToString<short>
 {
-    static std::string invoke(const int16_t& arg, std::string_view specifier)
+    static std::string invoke(const short& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 2);
+            return toHex(arg, sizeof(short));
         }
         if (specifier == "b") {
-            return toBin(arg, 2);
+            return toBin(arg, sizeof(short));
         }
         UNKNOWN_SPECIFIER();
     }
 };
 
 template<>
-struct DefaultToString<uint16_t>
+struct DefaultToString<unsigned short>
 {
-    static std::string invoke(const uint16_t& arg, std::string_view specifier)
+    static std::string invoke(const unsigned short& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 2);
+            return toHex(arg, sizeof(unsigned short));
         }
         if (specifier == "b") {
-            return toBin(arg, 2);
+            return toBin(arg, sizeof(unsigned short));
         }
         UNKNOWN_SPECIFIER();
     }
 };
 
 template<>
-struct DefaultToString<int32_t>
+struct DefaultToString<int>
 {
-    static std::string invoke(const int32_t& arg, std::string_view specifier)
+    static std::string invoke(const int& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 4);
+            return toHex(arg, sizeof(int));
         }
         if (specifier == "b") {
-            return toBin(arg, 4);
+            return toBin(arg, sizeof(int));
         }
         UNKNOWN_SPECIFIER();
     }
 };
 
 template<>
-struct DefaultToString<uint32_t>
+struct DefaultToString<unsigned int>
 {
-    static std::string invoke(const uint32_t& arg, std::string_view specifier)
+    static std::string invoke(const unsigned int& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 4);
+            return toHex(arg, sizeof(unsigned int));
         }
         if (specifier == "b") {
-            return toBin(arg, 4);
+            return toBin(arg, sizeof(unsigned int));
         }
         UNKNOWN_SPECIFIER();
     }
 };
 
 template<>
-struct DefaultToString<int64_t>
+struct DefaultToString<long>
 {
-    static std::string invoke(const int64_t& arg, std::string_view specifier)
+    static std::string invoke(const long& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 8);
+            return toHex(arg, sizeof(long));
         }
         if (specifier == "b") {
-            return toBin(arg, 8);
+            return toBin(arg, sizeof(long));
         }
         UNKNOWN_SPECIFIER();
     }
 };
 
 template<>
-struct DefaultToString<uint64_t>
+struct DefaultToString<unsigned long>
 {
-    static std::string invoke(const uint64_t& arg, std::string_view specifier)
+    static std::string invoke(const unsigned long& arg, std::string_view specifier)
     {
         if (specifier.empty() || specifier == "d") {
             return std::to_string(arg);
         }
         if (specifier == "x") {
-            return toHex(arg, 8);
+            return toHex(arg, sizeof(unsigned long));
         }
         if (specifier == "b") {
-            return toBin(arg, 8);
+            return toBin(arg, sizeof(unsigned long));
+        }
+        UNKNOWN_SPECIFIER();
+    }
+};
+
+template<>
+struct DefaultToString<long long>
+{
+    static std::string invoke(const long long& arg, std::string_view specifier)
+    {
+        if (specifier.empty() || specifier == "d") {
+            return std::to_string(arg);
+        }
+        if (specifier == "x") {
+            return toHex(arg, sizeof(long long));
+        }
+        if (specifier == "b") {
+            return toBin(arg, sizeof(long long));
+        }
+        UNKNOWN_SPECIFIER();
+    }
+};
+
+template<>
+struct DefaultToString<unsigned long long>
+{
+    static std::string invoke(const unsigned long long& arg, std::string_view specifier)
+    {
+        if (specifier.empty() || specifier == "d") {
+            return std::to_string(arg);
+        }
+        if (specifier == "x") {
+            return toHex(arg, sizeof(unsigned long long));
+        }
+        if (specifier == "b") {
+            return toBin(arg, sizeof(unsigned long long));
         }
         UNKNOWN_SPECIFIER();
     }
@@ -345,6 +381,15 @@ template<>
 struct DefaultToString<double>
 {
     static std::string invoke(const double& arg, [[maybe_unused]] std::string_view specifier)
+    {
+        return std::to_string(arg);
+    }
+};
+
+template<>
+struct DefaultToString<long double>
+{
+    static std::string invoke(const long double& arg, [[maybe_unused]] std::string_view specifier)
     {
         return std::to_string(arg);
     }
