@@ -675,7 +675,7 @@ uint64_t VirtualMemory::sys_seek(FD fd, uint64_t anchor, uint64_t offset)
     static_assert(SEEK_HEAD == SEEK_SET);
     static_assert(SEEK_CURRENT == SEEK_CUR);
     static_assert(SEEK_TAIL == SEEK_END);
-    auto off = ::lseek(fd, static_cast<__off_t>(offset), static_cast<int>(anchor));
+    auto off = ::lseek(fd, static_cast<off_t>(offset), static_cast<int>(anchor));
     if (off == -1) {
         this->mmio.content[MMIO::word0] = errno;
         return E_SYSTEM;
@@ -699,7 +699,7 @@ uint64_t VirtualMemory::sys_seek(FD fd, uint64_t anchor, uint64_t offset)
 uint64_t VirtualMemory::sys_trunc(FD fd, uint64_t len)
 {
 #ifdef CAMI_TARGET_INFO_UNIX_LIKE
-    auto ec = ::ftruncate(fd, static_cast<__off_t>(len));
+    auto ec = ::ftruncate(fd, static_cast<off_t>(len));
     if (ec < 0) {
         this->mmio.content[MMIO::word0] = errno;
         return E_SYSTEM;

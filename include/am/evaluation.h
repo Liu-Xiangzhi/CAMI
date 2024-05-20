@@ -26,90 +26,32 @@
 
 namespace cami::am {
 
-ValueBox operator+(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator-(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator*(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator/(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator%(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator<<(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator>>(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator<(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator<=(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator>(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator>=(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator==(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator!=(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator&(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator|(ValueBox
-lhs,
-ValueBox rhs
-);
-ValueBox operator^(ValueBox
-lhs,
-ValueBox rhs
-);
-void operator+=(ValueBox & lhs, ValueBox
-rhs);
-void operator-=(ValueBox & lhs, ValueBox
-rhs);
-void operator*=(ValueBox & lhs, ValueBox
-rhs);
-void operator/=(ValueBox & lhs, ValueBox
-rhs);
-void operator%=(ValueBox & lhs, ValueBox
-rhs);
-void operator<<=(ValueBox & lhs, ValueBox
-rhs);
-void operator>>=(ValueBox & lhs, ValueBox
-rhs);
-void operator&=(ValueBox & lhs, ValueBox
-rhs);
-void operator|=(ValueBox & lhs, ValueBox
-rhs);
-void operator^=(ValueBox & lhs, ValueBox
-rhs);
+ValueBox operator+(ValueBox lhs, ValueBox rhs);
+ValueBox operator-(ValueBox lhs, ValueBox rhs);
+ValueBox operator*(ValueBox lhs, ValueBox rhs);
+ValueBox operator/(ValueBox lhs, ValueBox rhs);
+ValueBox operator%(ValueBox lhs, ValueBox rhs);
+ValueBox operator<<(ValueBox lhs, ValueBox rhs);
+ValueBox operator>>(ValueBox lhs, ValueBox rhs);
+ValueBox operator<(ValueBox lhs, ValueBox rhs);
+ValueBox operator<=(ValueBox lhs, ValueBox rhs);
+ValueBox operator>(ValueBox lhs, ValueBox rhs);
+ValueBox operator>=(ValueBox lhs, ValueBox rhs);
+ValueBox operator==(ValueBox lhs, ValueBox rhs);
+ValueBox operator!=(ValueBox lhs, ValueBox rhs);
+ValueBox operator&(ValueBox lhs, ValueBox rhs);
+ValueBox operator|(ValueBox lhs, ValueBox rhs);
+ValueBox operator^(ValueBox lhs, ValueBox rhs);
+void operator+=(ValueBox& lhs, ValueBox rhs);
+void operator-=(ValueBox& lhs, ValueBox rhs);
+void operator*=(ValueBox& lhs, ValueBox rhs);
+void operator/=(ValueBox& lhs, ValueBox rhs);
+void operator%=(ValueBox& lhs, ValueBox rhs);
+void operator<<=(ValueBox& lhs, ValueBox rhs);
+void operator>>=(ValueBox& lhs, ValueBox rhs);
+void operator&=(ValueBox& lhs, ValueBox rhs);
+void operator|=(ValueBox& lhs, ValueBox rhs);
+void operator^=(ValueBox& lhs, ValueBox rhs);
 
 class OperandStack
 {
