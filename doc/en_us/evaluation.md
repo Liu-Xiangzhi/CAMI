@@ -107,6 +107,7 @@ Avaliable paramters and its meaning are as following:
 |`local_out_dir`| The output directory exclusively used by the current detection software under `${out_dir}`, i.e., `${out_dir}/<tool_name>/`|
 |`unique`| A randomly generated unique string. The current generation logic is `str(time.time()).replace('.', '_')`|
 |`output`| A unique string generated based on the current test case name. The current generation logic is `input_name.replace(os.sep, '-') + '.out'`|
+|`shell_ext`|extension name of shell file of current OS(`bat` in Windows and `sh` in Unix-like)|
 
 The `interrupt_on_error` field under the `commands` object indicates whether the command can fail. When `interrupt_on_error` is false, the next command will be run regardless of whether current command exited successfully. Conversely, if the current instruction fails when `interrupt_on_error` is true, the running of the current test case will be interrupted.
 

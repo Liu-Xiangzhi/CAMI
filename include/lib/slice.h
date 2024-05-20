@@ -143,12 +143,11 @@ public:
 
     Slice(T* ptr, size_t size) : ptr(ptr), size_(size) {}
 
-    template<template<typename> typename P>
-    Slice(P<T>& container): ptr(container.data()), size_(container.size()) {} // NOLINT
+    template<typename Container, typename = std::enable_if_t<std::is_same_v<typename Container::value_type, T>>>
+    Slice(Container& container): ptr(container.data()), size_(container.size()) {} // NOLINT
 
-    template<template<typename> typename P>
-    Slice(const P<std::remove_const_t<T>>& container): ptr(container.data()), size_(container.size()) {} // NOLINT
-
+    template<typename Container, typename = std::enable_if_t<std::is_same_v<typename Container::value_type const, T>>>
+    Slice(const Container& container): ptr(container.data()), size_(container.size()) {} // NOLINT
 public:
 
     [[nodiscard]] size_t length() const noexcept

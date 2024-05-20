@@ -43,7 +43,7 @@ class Executor:
 
     def _parse_cmd(self, cmd:str) -> list[str]:
         import shlex
-        return shlex.split(re.sub(r'.?\$\{\w+\}', lambda s: self._substitue_variable(s.group(0)), cmd))
+        return shlex.split(re.sub(r'.?\$\{\w+\}', lambda s: self._substitue_variable(s.group(0)), cmd), posix=os.name != 'nt')
     
     def _substitue_variable(self, var:str) -> str:
         def do_substitue_variable(v: str) -> str:
@@ -64,6 +64,8 @@ class Executor:
                 case 'output':
                     input_name, _ = os.path.splitext(self.current_test_case)
                     return input_name.replace(os.sep, '-') + '.out'
+                case 'shell_ext':
+                    return 'bat' if os.name == 'nt' else 'sh'
                 case _:
                     raise ValueError(f'Unknown command variable "{v}"')
         if var[0] == '$' and var[1] == '$':
@@ -102,7 +104,7 @@ class Engine:
 
     async def _run_suite(self, suite: str):
         from pathlib import Path
-        clear_line = '\r' + ' ' * os.get_terminal_size().columns + '\r'
+        clear_line = '\r' + ' ' * (os.get_terminal_size().columns - 1) + '\r'
         tasks: list[asyncio.Task[tuple[str, result.Case]|None]] = []
         for test_case in Path(os.path.join(self.test_suite_dir, suite)).glob('**/*.c'):
             for name, tool in self.config.tools.items():

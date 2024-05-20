@@ -26,7 +26,12 @@
 #define STDERR_FD STDERR_FILENO
 
 #elif defined(CAMI_TARGET_INFO_WINDOWS)
-#error not implemented
+#include <windows.h>
+#define FD HANDLE
+#define IVD_FD INVALID_HANDLE_VALUE
+#define STDIN_FD GetStdHandle(STD_INPUT_HANDLE)
+#define STDOUT_FD GetStdHandle(STD_OUTPUT_HANDLE)
+#define STDERR_FD GetStdHandle(STD_ERROR_HANDLE)
 #else
 #error unsupported OS
 #endif

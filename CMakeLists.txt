@@ -60,6 +60,10 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif ()
 set_target_info()
 
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_compile_options(/wd5051 /wd4455 /wd4819) # suppress verbose and useless msvc warning
+endif()
+
 include_directories(include)
 
 add_subdirectory(src)

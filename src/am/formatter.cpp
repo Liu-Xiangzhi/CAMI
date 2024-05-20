@@ -69,7 +69,7 @@ std::string Formatter::formatType(const ts::Type& type) // NOLINT
     case Kind::struct_:
         return "struct "s + down_cast<const Struct&>(type).name;
     case Kind::union_:
-        return "union "s + down_cast<const Struct&>(type).name;
+        return "union "s + down_cast<const Union&>(type).name;
     case Kind::function: {
         auto& func = down_cast<const Function&>(type);
         std::string result{"("s};

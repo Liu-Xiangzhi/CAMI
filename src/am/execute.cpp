@@ -206,7 +206,7 @@ void Execute::do_read(am::AbstractMachine& am)
             return new IntegerValue{&lvalue_type, val};
         }
     }();
-    am.operand_stack.push({ValueBox{value}, {.directly_read_from = &obj, .indeterminate = false}});
+    am.operand_stack.push({ValueBox{value}, {&obj, false}});
 }
 
 void Execute::do_modify(am::AbstractMachine& am, ValueBox vb) // NOLINT
@@ -480,7 +480,7 @@ void Execute::ret(AbstractMachine& am)
 
 void Execute::pushUndefined(cami::am::AbstractMachine& am)
 {
-    am.operand_stack.push({ValueBox{new UndefinedValue{}}, {.directly_read_from = {}, .indeterminate = true}});
+    am.operand_stack.push({ValueBox{new UndefinedValue{}}, {{}, true}});
 }
 
 void Execute::push(AbstractMachine& am, InstrInfo info)

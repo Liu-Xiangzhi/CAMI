@@ -4,7 +4,7 @@
             "description" : "C Abstract Machine Interpreter",
             "commands" : [
                 {
-                    "command": "${eval_root}/bin/cami.sh ${input} ${test_suite_dir} ${local_out_dir}",
+                    "command": "${eval_root}/bin/cami.${shell_ext} ${input} ${test_suite_dir} ${local_out_dir}",
                     "interrupt_on_error": false
                 }
             ],
@@ -110,7 +110,7 @@
     },
     "filter": [
         {
-            "tool" : "kcc",
+			"tool" : "kcc",
             "rule" : ["!positive/ub25/4\\.c|negative/ub24/(1|2|4)\\.c"]
         }
     ]

@@ -407,7 +407,7 @@ f32_to_int:
         auto& v = this->get<F32Value>();
         auto [min, max] = [&]() -> std::pair<float, float> {
             auto kind = type.kind() == Kind::char_ ? Kind::i8 : type.kind();
-            return {getMinValue(kind), getMaxValue(kind)};
+            return {static_cast<float>(getMinValue(kind)), static_cast<float>(getMaxValue(kind))};
         }();
         if (v.val < min || v.val > max) {
             throw UBException{{UB::cast_to_or_from_integer}, lib::format(
@@ -423,7 +423,7 @@ f64_to_int:
         auto& v = this->get<F64Value>();
         auto [min, max] = [&]() -> std::pair<double, double> {
             auto kind = type.kind() == Kind::char_ ? Kind::i8 : type.kind();
-            return {getMinValue(kind), getMaxValue(kind)};
+            return {static_cast<double>(getMinValue(kind)), static_cast<double>(getMaxValue(kind))};
         }();
         if (v.val < min || v.val > max) {
             throw UBException{{UB::cast_to_or_from_integer}, lib::format(

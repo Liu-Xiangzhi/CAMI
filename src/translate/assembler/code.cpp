@@ -442,12 +442,13 @@ std::pair<lib::Optional<const ts::Type*>, bool> Assembler::parseTypeBaseOrQualif
         return {&type_manager.getQualifiedType(*base_type, qualifier), false};
     }
     if (str == "struct" || str == "union") {
+        const bool is_struct = str == "struct";
         if ((token = this->nextToken())->type != Token::Type::unquote_string) {
             this->diagnostic(token->begin, "expect unquoted string");
             return {};
         }
         auto& name = down_cast<StringToken&>(token).value;
-        if (str == "struct") {
+        if (is_struct) {
             return {&type_manager.declareStruct(std::move(name)), false};
         }
         return {&type_manager.declareUnion(std::move(name)), false};

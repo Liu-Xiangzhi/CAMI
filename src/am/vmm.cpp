@@ -25,6 +25,9 @@
 #include <lib/format.h>
 #ifdef CAMI_TARGET_INFO_UNIX_LIKE
 #include <fcntl.h>
+#elif defined(CAMI_TARGET_INFO_WINDOWS)
+#include <shlwapi.h>
+#include <fileapi.h>
 #endif
 
 using namespace cami;
@@ -584,7 +587,21 @@ uint64_t VirtualMemory::sys_open(const std::string& name, uint64_t mode, uint64_
     file_desc->mode = static_cast<int>(mode);
     return SUCCESS;
 #else
-#error not implemented
+    const auto basic_mode = mode & MODE_BMODE_MASK;
+    if (basic_mode == MODE_TEST) {
+        return PathFileExistsA(name.c_str()) ? SUCCESS : E_NOT_EXIST;
+    }
+    auto md = (basic_mode & MODE_READ_MASK ? GENERIC_READ : 0) | (basic_mode & MODE_WRITE_MASK ? GENERIC_WRITE : 0); 
+    auto creation_disposition = mode & (MODE_CREAT | MODE_TRUNC) ? CREATE_ALWAYS : (mode & MODE_CREAT ? OPEN_ALWAYS : OPEN_EXISTING);
+    auto handel = CreateFileA(name.c_str(), md, 0, nullptr, creation_disposition, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handel == INVALID_HANDLE_VALUE) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    auto& file_desc = this->mmio.file_descriptor[fd_no];
+    file_desc->file = handel;
+    file_desc->mode = static_cast<int>(mode);
+    return SUCCESS;
 #endif
 }
 
@@ -600,7 +617,14 @@ uint64_t VirtualMemory::sys_close(FD fd)
         return E_SYSTEM;
     }
 #else
-#error not implemented
+    auto err = CloseHandle(fd);
+    if (err == 0) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    } else {
+        this->mmio.file_descriptor[this->mmio.content[MMIO::word0]]->file = IVD_FD;
+        return SUCCESS;
+    }
 #endif
 }
 
@@ -614,7 +638,13 @@ uint64_t VirtualMemory::sys_read(FD fd, void* buf, uint64_t len)
     }
     return size;
 #else
-#error not implemented
+    DWORD size;
+    auto err = ReadFile(fd, buf, len, &size, nullptr);
+    if (!err) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    return size;
 #endif
 }
 
@@ -628,17 +658,23 @@ uint64_t VirtualMemory::sys_write(FD fd, void* buf, uint64_t len)
     }
     return size;
 #else
-#error not implemented
+    DWORD size;
+    auto err = WriteFile(fd, buf, len, &size, nullptr);
+    if (!err) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    return size;
 #endif
 }
 
 uint64_t VirtualMemory::sys_seek(FD fd, uint64_t anchor, uint64_t offset)
 {
+    ASSERT(anchor == SEEK_HEAD || anchor == SEEK_CURRENT || anchor == SEEK_TAIL, "precondition violation");
 #ifdef CAMI_TARGET_INFO_UNIX_LIKE
     static_assert(SEEK_HEAD == SEEK_SET);
     static_assert(SEEK_CURRENT == SEEK_CUR);
     static_assert(SEEK_TAIL == SEEK_END);
-    ASSERT(anchor == SEEK_HEAD || anchor == SEEK_CURRENT || anchor == SEEK_TAIL, "precondition violation");
     auto off = ::lseek(fd, static_cast<__off_t>(offset), static_cast<int>(anchor));
     if (off == -1) {
         this->mmio.content[MMIO::word0] = errno;
@@ -646,7 +682,17 @@ uint64_t VirtualMemory::sys_seek(FD fd, uint64_t anchor, uint64_t offset)
     }
     return off;
 #else
-#error not implemented
+    static_assert(SEEK_HEAD == FILE_BEGIN);
+    static_assert(SEEK_CURRENT == FILE_CURRENT);
+    static_assert(SEEK_TAIL == FILE_END);
+    LARGE_INTEGER off;
+    LARGE_INTEGER result;
+    off.QuadPart = offset;
+    if (!SetFilePointerEx(fd, off, &result, anchor)) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    return result.QuadPart;
 #endif
 }
 
@@ -660,7 +706,17 @@ uint64_t VirtualMemory::sys_trunc(FD fd, uint64_t len)
     }
     return SUCCESS;
 #else
-#error not implemented
+    LARGE_INTEGER new_size;
+    new_size.QuadPart = len;
+    if (!SetFilePointerEx(fd, new_size, NULL, FILE_BEGIN)) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    if (!SetEndOfFile(fd)) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    return SUCCESS;
 #endif
 }
 
@@ -674,7 +730,11 @@ uint64_t VirtualMemory::sys_rename(const std::string& from, const std::string& t
     }
     return SUCCESS;
 #else
-#error not implemented
+    if (!MoveFile(from.c_str(), to.c_str())) {
+        this->mmio.content[MMIO::word0] = GetLastError();
+        return E_SYSTEM;
+    }
+    return SUCCESS;
 #endif
 }
 
@@ -688,6 +748,10 @@ uint64_t VirtualMemory::sys_remove(const std::string& name)
     }
     return SUCCESS;
 #else
-#error not implemented
+    if (!DeleteFile(name.c_str())) {
+        this->mmio.content[MMIO::word0] = errno;
+        return E_SYSTEM;
+    }
+    return SUCCESS;
 #endif
 }
