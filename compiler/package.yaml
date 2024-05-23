@@ -1,0 +1,55 @@
+name:                compiler
+version:             0.1.0.0
+github:              "Liu-Xiangzhi/CAMI"
+license:             GPL-2.0-or-later
+author:              "Liu Xiangzhi"
+maintainer:          "liuxiangzhi000@gmail.com"
+copyright:           "Copyright (c) 2024 Liu Xiangzhi"
+
+# Metadata used when publishing your package
+synopsis: A compiler translates C program into CAMI Bytecode
+category: Compiler
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description: Please see the README on GitHub at <https://github.com/Liu-Xiangzhi/CAMI#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
+
+library:
+  source-dirs: src
+
+executables:
+  compiler-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - compiler
+
+tests:
+  compiler-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - compiler
