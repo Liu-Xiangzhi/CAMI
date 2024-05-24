@@ -1,4 +1,4 @@
-name:                compiler
+name:                camic
 version:             0.1.0.0
 github:              "Liu-Xiangzhi/CAMI"
 license:             GPL-2.0-or-later
@@ -33,18 +33,18 @@ library:
   source-dirs: src
 
 executables:
-  compiler-exe:
-    main:                Main.hs
+  camic:
+    main:                main.hs
     source-dirs:         app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - compiler
+    - camic
 
 tests:
-  compiler-test:
+  camic-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -52,4 +52,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - compiler
+    - camic

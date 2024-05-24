@@ -4,7 +4,7 @@ cabal-version: 2.2
 --
 -- see: https://github.com/sol/hpack
 
-name:           compiler
+name:           camic
 version:        0.1.0.0
 synopsis:       A compiler translates C program into CAMI Bytecode
 description:    Please see the README on GitHub at <https://github.com/Liu-Xiangzhi/CAMI#readme>
@@ -25,9 +25,9 @@ library
   exposed-modules:
       Lib
   other-modules:
-      Paths_compiler
+      Paths_camic
   autogen-modules:
-      Paths_compiler
+      Paths_camic
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
@@ -35,31 +35,31 @@ library
       base >=4.7 && <5
   default-language: Haskell2010
 
-executable compiler-exe
-  main-is: Main.hs
+executable camic
+  main-is: main.hs
   other-modules:
-      Paths_compiler
+      Paths_camic
   autogen-modules:
-      Paths_compiler
+      Paths_camic
   hs-source-dirs:
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , compiler
+    , camic
   default-language: Haskell2010
 
-test-suite compiler-test
+test-suite camic-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_compiler
+      Paths_camic
   autogen-modules:
-      Paths_compiler
+      Paths_camic
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , compiler
+    , camic
   default-language: Haskell2010
