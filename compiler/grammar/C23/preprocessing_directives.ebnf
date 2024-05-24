@@ -1,0 +1,161 @@
+(* 3 Preprocessing directives *)
+preprocessing-file
+    = [ group ];
+
+group
+    = group-part
+    | group, group-part;
+
+group-part
+    = if-section
+    | control-line
+    | text-line
+    | '#', non-directive;
+
+if-section
+    = if-group, [ elif-groups ], [ else-group ], endif-line;
+
+if-group
+    = '#', 'if', constant-expression, new-line, [ group ]
+    | '#', 'ifdef', identifier, new-line, [ group ]
+    | '#', 'ifndef', identifier, new-line, [ group ];
+
+elif-groups
+    = elif-group
+    | elif-groups, elif-group;
+
+elif-group
+    = '#', 'elif', constant-expression, new-line, [ group ]
+    | '#', 'elifdef', identifier, new-line, [ group ]
+    | '#', 'elifndef', identifier, new-line, [ group ];
+
+else-group
+    = '#', 'else', new-line, [ group ];
+
+endif-line
+    = '#', 'endif', new-line;
+
+control-line
+    = '#', 'include', pp-tokens, new-line
+    | '#', 'embed', pp-tokens, new-line
+    | '#', 'define', identifier, replacement-list, new-line
+    | '#', 'define', identifier, lparen, [ identifier-list ], ')', replacement-list, new-line
+    | '#', 'define', identifier, lparen, '...', ')', replacement-list, new-line
+    | '#', 'define', identifier, lparen, identifier-list, ',', '...', ')', replacement-list, new-line
+    | '#', 'undef', identifier, new-line
+    | '#', 'line', pp-tokens, new-line
+    | '#', 'error', [ pp-tokens ], new-line
+    | '#', 'warning', [ pp-tokens ], new-line
+    | '#', 'pragma', [ pp-tokens ], new-line
+    | '#', new-line;
+
+text-line
+    = [ pp-tokens ], new-line;
+
+non-directive
+    = pp-tokens, new-line;
+
+lparen
+    = ? a '(' character not immediately preceded by white space ?;
+
+replacement-list
+    = [ pp-tokens ];
+
+pp-tokens
+    = preprocessing-token
+    | pp-tokens, preprocessing-token;
+
+new-line
+    = ? the new-line character ?;
+
+identifier-list
+    = identifier
+    | identifier-list, ',', identifier;
+
+pp-parameter
+    = pp-parameter-name, [ pp-parameter-clause ];
+
+pp-parameter-name
+    = pp-standard-parameter
+    | pp-prefixed-parameter;
+
+pp-standard-parameter
+    = identifier;
+
+pp-prefixed-parameter
+    = identifier, '::', identifier;
+
+pp-parameter-clause
+    = '(', [ pp-balanced-token-sequence ], ')';
+
+pp-balanced-token-sequence
+    = pp-balanced-token
+    | pp-balanced-token-sequence, pp-balanced-token;
+
+pp-balanced-token
+    = '(', [ pp-balanced-token-sequence ], ')'
+    | '[', [ pp-balanced-token-sequence ], ']'
+    | '{', [ pp-balanced-token-sequence ], '}'
+    | ? any pp-token other than a parenthesis , a bracket , or a brace ?;
+
+embed-parameter-sequence
+    = pp-parameter
+    | embed-parameter-sequence, pp-parameter;
+
+defined-macro-expression
+    = 'defined', identifier
+    | 'defined', '(', identifier, ')';
+
+h-preprocessing-token
+    = ? any preprocessing-token other than > ?;
+
+h-pp-tokens
+    = h-preprocessing-token
+    | h-pp-tokens, h-preprocessing-token;
+
+header-name-tokens
+    = string-literal
+    | '<', h-pp-tokens, '>';
+
+has-include-expression
+    = '__has_include', '(', header-name, ')'
+    | '__has_include', '(', header-name-tokens, ')';
+
+has-embed-expression
+    = '__has_embed', '(', header-name, [ embed-parameter-sequence ], ')'
+    | '__has_embed', '(', header-name-tokens, [ pp-balanced-token-sequence ], ')';
+
+has-c-attribute-express
+    = '__has_c_attribute', '(', pp-tokens, ')';
+
+va-opt-replacement
+    = '__VA_OPT__', '(', [ pp-tokens ], ')';
+
+standard-pragma
+    = '#', 'pragma', 'STDC', 'FP_CONTRACT', on-off-switch
+    | '#', 'pragma', 'STDC', 'FENV_ACCESS', on-off-switch
+    | '#', 'pragma', 'STDC', 'FENV_DEC_ROUND', dec-direction
+    | '#', 'pragma', 'STDC', 'FENV_ROUND', direction
+    | '#', 'pragma', 'STDC', 'CX_LIMITED_RANGE', on-off-switch;
+
+on-off-switch
+    = 'ON'
+    | 'OFF'
+    | 'DEFAULT';
+
+direction
+    = 'FE_DOWNWARD'
+    | 'FE_TONEAREST'
+    | 'FE_TONEARESTFROMZERO'
+    | 'FE_TOWARDZERO'
+    | 'FE_UPWARD'
+    | 'FE_DYNAMIC';
+
+dec-direction
+    = 'FE_DEC_DOWNWARD'
+    | 'FE_DEC_TONEAREST'
+    | 'FE_DEC_TONEARESTFROMZERO'
+    | 'FE_DEC_TOWARDZERO'
+    | 'FE_DEC_UPWARD'
+    | 'FE_DEC_DYNAMIC';
+

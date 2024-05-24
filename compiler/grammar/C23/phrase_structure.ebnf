@@ -1,0 +1,471 @@
+(* 2 Phrase structure grammar *)
+(* 2.1 Expressions *)
+primary-expression
+    = identifier
+    | constant
+    | string-literal
+    | '(', expression, ')'
+    | generic-selection;
+
+generic-selection
+    = '_Generic', '(', assignment-expression, ',', generic-assoc-list, ')';
+
+generic-assoc-list
+    = generic-association
+    | generic-assoc-list, ',', generic-association;
+
+generic-association
+    = type-name, ':', assignment-expression
+    | 'default', ':', assignment-expression;
+
+postfix-expression
+    = primary-expression
+    | postfix-expression, '[', expression, ']'
+    | postfix-expression, '(', [ argument-expression-list ], ')'
+    | postfix-expression, '.', identifier
+    | postfix-expression, '->', identifier
+    | postfix-expression, '++'
+    | postfix-expression, '--'
+    | compound-literal;
+
+argument-expression-list
+    = assignment-expression
+    | argument-expression-list, ',', assignment-expression;
+
+compound-literal
+    = '(', [ storage-class-specifiers ], type-name, ')', braced-initializer;
+
+storage-class-specifiers
+    = storage-class-specifier
+    | storage-class-specifiers, storage-class-specifier;
+
+unary-expression
+    = postfix-expression
+    | '++', unary-expression
+    | '--', unary-expression
+    | unary-operator, cast-expression
+    | 'sizeof', unary-expression
+    | 'sizeof', '(', type-name, ')'
+    | 'alignof', '(', type-name, ')';
+
+unary-operator
+    = '&'
+    | '*'
+    | '+'
+    | '-'
+    | '~'
+    | '!';
+
+cast-expression
+    = unary-expression
+    | '(', type-name, ')', cast-expression;
+
+multiplicative-expression
+    = cast-expression
+    | multiplicative-expression, '*', cast-expression
+    | multiplicative-expression, '/', cast-expression
+    | multiplicative-expression, '%', cast-expression;
+
+additive-expression
+    = multiplicative-expression
+    | additive-expression, '+', multiplicative-expression
+    | additive-expression, '-', multiplicative-expression;
+
+shift-expression
+    = additive-expression
+    | shift-expression, '<<', additive-expression
+    | shift-expression, '>>', additive-expression;
+
+relational-expression
+    = shift-expression
+    | relational-expression, '<', shift-expression
+    | relational-expression, '>', shift-expression
+    | relational-expression, '=', shift-expression
+    | relational-expression, '=', shift-expression;
+
+equality-expression
+    = relational-expression
+    | equality-expression, '==', relational-expression
+    | equality-expression, '!=', relational-expression;
+
+AND-expression
+    = equality-expression
+    | AND-expression, '&', equality-expression;
+
+exclusive-OR-expression
+    = AND-expression
+    | exclusive-OR-expression, '^', AND-expression;
+
+inclusive-OR-expression
+    = exclusive-OR-expression
+    | inclusive-OR-expression, '|', exclusive-OR-expression;
+
+logical-AND-expression
+    = inclusive-OR-expression
+    | logical-AND-expression, '&&', inclusive-OR-expression;
+
+logical-OR-expression
+    = logical-AND-expression
+    | logical-OR-expression, '||', logical-AND-expression;
+
+conditional-expression
+    = logical-OR-expression
+    | logical-OR-expression, '?', expression, ':', conditional-expression;
+
+assignment-expression
+    = conditional-expression
+    | unary-expression, assignment-operator, assignment-expression;
+
+assignment-operator
+    = '='
+    | '*='
+    | '/='
+    | '%='
+    | '+='
+    | '-='
+    | '<<='
+    | '>>='
+    | '&='
+    | '^='
+    | '|=';
+
+expression
+    = assignment-expression
+    | expression, ',', assignment-expression;
+
+constant-expression
+    = conditional-expression;
+
+(* 2.2 Declarations *)
+declaration
+    = declaration-specifiers, [ init-declarator-list ], ';'
+    | attribute-specifier-sequence, declaration-specifiers, init-declarator-list, ';'
+    | static_assert-declaration
+    | attribute-declaration;
+
+declaration-specifiers
+    = declaration-specifier, [ attribute-specifier-sequence ]
+    | declaration-specifier, declaration-specifiers;
+
+declaration-specifier
+    = storage-class-specifier
+    | type-specifier-qualifier
+    | function-specifier;
+
+init-declarator-list
+    = init-declarator
+    | init-declarator-list, ',', init-declarator;
+
+init-declarator
+    = declarator
+    | declarator, '=', initializer;
+
+attribute-declaration
+    = attribute-specifier-sequence, ';';
+
+storage-class-specifier
+    = 'auto'
+    | 'constexpr'
+    | 'extern'
+    | 'register'
+    | 'static'
+    | 'thread_local'
+    | 'typedef';
+
+type-specifier
+    = 'void'
+    | 'char'
+    | 'short'
+    | 'int'
+    | 'long'
+    | 'float'
+    | 'double'
+    | 'signed'
+    | 'unsigned'
+    | '_BitInt', '(', constant-expression, ')'
+    | 'bool'
+    | '_Complex'
+    | '_Decimal32'
+    | '_Decimal64'
+    | '_Decimal128'
+    | atomic-type-specifier
+    | struct-or-union-specifier
+    | enum-specifier
+    | typedef-name
+    | typeof-specifier;
+
+struct-or-union-specifier
+    = struct-or-union, [ attribute-specifier-sequence ], [ identifier ], '{', member-declaration-list, '}'
+    | struct-or-union, [ attribute-specifier-sequence ], identifier;
+
+struct-or-union
+    = 'struct'
+    | 'union';
+
+member-declaration-list
+    = member-declaration
+    | member-declaration-list, member-declaration;
+
+member-declaration
+    = [ attribute-specifier-sequence ], specifier-qualifier-list, [ member-declarator-list ], ';'
+    | static_assert-declaration;
+
+specifier-qualifier-list
+    = type-specifier-qualifier, [ attribute-specifier-sequence ]
+    | type-specifier-qualifier, specifier-qualifier-list;
+
+type-specifier-qualifier
+    = type-specifier
+    | type-qualifier
+    | alignment-specifier;
+
+member-declarator-list
+    = member-declarator
+    | member-declarator-list, ',', member-declarator;
+
+member-declarator
+    = declarator
+    | [ declarator ], ':', constant-expression;
+
+enum-specifier
+    = 'enum', [ attribute-specifier-sequence ], [ identifier ], [ enum-type-specifier ], '{', enumerator-list, [ ',' ], '}'
+    | 'enum', identifier, [ enum-type-specifier ];
+
+enumerator-list
+    = enumerator
+    | enumerator-list, ',', enumerator;
+
+enumerator
+    = enumeration-constant, [ attribute-specifier-sequence ]
+    | enumeration-constant, [ attribute-specifier-sequence ], '=', constant-expression;
+
+enum-type-specifier
+    = ':', specifier-qualifier-list;
+
+atomic-type-specifier
+    = '_Atomic', '(', type-name, ')';
+
+typeof-specifier
+    = 'typeof', '(', typeof-specifier-argument, ')'
+    | 'typeof_unqual', '(', typeof-specifier-argument, ')';
+
+typeof-specifier-argument
+    = expression
+    | type-name;
+
+type-qualifier
+    = 'const'
+    | 'restrict'
+    | 'volatile'
+    | '_Atomic';
+
+function-specifier
+    = 'inline'
+    | '_Noreturn';
+
+alignment-specifier
+    = 'alignas', '(', type-name, ')'
+    | 'alignas', '(', constant-expression, ')';
+
+declarator
+    = [ pointer ], direct-declarator;
+
+direct-declarator
+    = identifier, [ attribute-specifier-sequence ]
+    | '(', declarator, ')'
+    | array-declarator, [ attribute-specifier-sequence ]
+    | function-declarator, [ attribute-specifier-sequence ];
+
+array-declarator
+    = direct-declarator, '[', [ type-qualifier-list ], [ assignment-expression ], ']'
+    | direct-declarator, '[', 'static', [ type-qualifier-list ], assignment-expression, ']'
+    | direct-declarator, '[', type-qualifier-list, 'static', assignment-expression, ']'
+    | direct-declarator, '[', [ type-qualifier-list ], '*', ']';
+
+function-declarator
+    = direct-declarator, '(', [ parameter-type-list ], ')';
+
+pointer
+    = '*', [ attribute-specifier-sequence ], [ type-qualifier-list ]
+    | '*', [ attribute-specifier-sequence ], [ type-qualifier-list ], pointer;
+
+type-qualifier-list
+    = type-qualifier
+    | type-qualifier-list, type-qualifier;
+
+parameter-type-list
+    = parameter-list
+    | parameter-list, ',', '...'
+    | '...';
+
+parameter-list
+    = parameter-declaration
+    | parameter-list, ',', parameter-declaration;
+
+parameter-declaration
+    = [ attribute-specifier-sequence ], declaration-specifiers, declarator
+    | [ attribute-specifier-sequence ], declaration-specifiers, [ abstract-declarator ];
+
+type-name
+    = specifier-qualifier-list, [ abstract-declarator ];
+
+abstract-declarator
+    = pointer
+    | [ pointer ], direct-abstract-declarator;
+
+direct-abstract-declarator
+    = '(', abstract-declarator, ')'
+    | array-abstract-declarator, [ attribute-specifier-sequence ]
+    | function-abstract-declarator, [ attribute-specifier-sequence ];
+
+array-abstract-declarator
+    = [ direct-abstract-declarator ], '[', [ type-qualifier-list ], [ assignment-expression ], ']'
+    | [ direct-abstract-declarator ], '[', 'static', [ type-qualifier-list ], assignment-expression, ']'
+    | [ direct-abstract-declarator ], '[', type-qualifier-list, 'static', 'assignment-expression', ']'
+    | [ direct-abstract-declarator ], '[', '*', ']';
+
+function-abstract-declarator
+    = [ direct-abstract-declarator ], '(', [ parameter-type-list ], ')';
+
+typedef-name
+    = identifier;
+
+braced-initializer
+    = '{', '}'
+    | '{', initializer-list, [ ',' ], '}';
+
+initializer
+    = assignment-expression
+    | braced-initializer;
+
+initializer-list
+    = [ designation ], initializer
+    | initializer-list, ',', [ designation ], initializer;
+
+designation
+    = designator-list, '=';
+
+designator-list
+    = designator
+    | designator-list, designator;
+
+designator
+    = '[', constant-expression, ']'
+    | '.', identifier;
+
+static_assert-declaration
+    = 'static_assert', '(', constant-expression, [ ',', string-literal ], ')', ';';
+
+attribute-specifier-sequence
+    = [ attribute-specifier-sequence ], attribute-specifier;
+
+attribute-specifier
+    = '[', '[', attribute-list, ']', ']';
+
+attribute-list
+    = [ attribute ]
+    | attribute-list, ',', [ attribute ];
+
+attribute
+    = attribute-token, [ attribute-argument-clause ];
+
+attribute-token
+    = standard-attribute
+    | attribute-prefixed-token;
+
+standard-attribute
+    = identifier;
+
+attribute-prefixed-token
+    = attribute-prefix, '::', identifier;
+
+attribute-prefix
+    = identifier;
+
+attribute-argument-clause
+    = '(', [ balanced-token-sequence ], ')';
+
+balanced-token-sequence
+    = balanced-token
+    | balanced-token-sequence, balanced-token;
+
+balanced-token
+    = '(', [ balanced-token-sequence ], ')'
+    | '[', [ balanced-token-sequence ], ']'
+    | '{', [ balanced-token-sequence ], '}'
+    | ? any token other than a parenthesis , a bracket , or a brace ?;
+
+(* 2.3 Statements *)
+statement
+    = labeled-statement
+    | unlabeled-statement;
+
+unlabeled-statement
+    = expression-statement
+    | [ attribute-specifier-sequence ], primary-block
+    | [ attribute-specifier-sequence ], jump-statement;
+
+primary-block
+    = compound-statement
+    | selection-statement
+    | iteration-statement;
+
+secondary-block
+    = statement;
+
+label
+    = [ attribute-specifier-sequence ], identifier, ':'
+    | [ attribute-specifier-sequence ], 'case', constant-expression, ':'
+    | [ attribute-specifier-sequence ], 'default', ':';
+
+labeled-statement
+    = label, statement;
+
+compound-statement
+    = '{', [ block-item-list ], '}';
+
+block-item-list
+    = block-item
+    | block-item-list, block-item;
+
+block-item
+    = declaration
+    | unlabeled-statement
+    | label;
+
+expression-statement
+    = [ expression ], ';'
+    | attribute-specifier-sequence, expression, ';';
+
+selection-statement
+    = 'if', '(', expression, ')', secondary-block
+    | 'if', '(', expression, ')', secondary-block, 'else', secondary-block
+    | 'switch', '(', expression, ')', secondary-block;
+
+iteration-statement
+    = 'while', '(', expression, ')', secondary-block
+    | 'do', secondary-block, 'while', '(', expression, ')', ';'
+    | 'for', '(', [ expression ], ';', [ expression ], ';', [ expression ], ')', secondary-block
+    | 'for', '(', declaration, [ expression ], ';', [ expression ], ')', secondary-block;
+
+jump-statement
+    = 'goto', identifier, ';'
+    | 'continue', ';'
+    | 'break', ';'
+    | 'return', [ expression ], ';';
+
+(* 2.4 External definiitions *)
+translation-unit
+    = external-declaration
+    | translation-unit, external-declaration;
+
+external-declaration
+    = function-definition
+    | declaration;
+
+function-definition
+    = [ attribute-specifier-sequence ], declaration-specifiers, declarator, function-body;
+
+function-body
+    = compound-statement;
+
