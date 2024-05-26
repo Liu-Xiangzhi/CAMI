@@ -1,0 +1,65 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.36.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           camic
+version:        0.1.0.0
+synopsis:       A compiler translates C program into CAMI Bytecode
+description:    Please see the README on GitHub at <https://github.com/Liu-Xiangzhi/CAMI#readme>
+category:       Compiler
+homepage:       https://github.com/Liu-Xiangzhi/CAMI#readme
+bug-reports:    https://github.com/Liu-Xiangzhi/CAMI/issues
+author:         Liu Xiangzhi
+maintainer:     liuxiangzhi000@gmail.com
+copyright:      Copyright (c) 2024 Liu Xiangzhi
+license:        GPL-2.0-or-later
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/Liu-Xiangzhi/CAMI
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+executable camic
+  main-is: main.hs
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , camic
+  default-language: Haskell2010
+
+test-suite camic-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , camic
+  default-language: Haskell2010

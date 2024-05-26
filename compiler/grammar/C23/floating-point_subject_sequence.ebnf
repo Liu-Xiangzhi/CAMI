@@ -1,0 +1,29 @@
+(* 4 Floating-point subject sequence *)
+(* 4.1 NaN char sequence *)
+n-char-sequence
+    = digit
+    | nondigit
+    | n-char-sequence, digit
+    | n-char-sequence, nondigit;
+
+(* 4.2 NaN wchar_t sequence *)
+n-wchar-sequence
+    = digit
+    | nondigit
+    | n-wchar-sequence, digit
+    | n-wchar-sequence, nondigit;
+
+(* 5 Decimal floating-point subject sequence *)
+(* 5.1 NaN decimal char sequence *)
+d-char-sequence
+    = digit
+    | nondigit
+    | d-char-sequence, digit
+    | d-char-sequence, nondigit;
+
+(* 5.2 NaN decimal wchar_t sequence *)
+d-wchar-sequence
+    = digit
+    | nondigit
+    | d-wchar-sequence, digit
+    | d-wchar-sequence, nondigit;
