@@ -65,7 +65,7 @@ keyword
     | 'volatile'
     | 'while'
     | '_Atomic'
-    | '_BigInt'
+    | '_BitInt'
     | '_Complex'
     | '_Decimal128'
     | '_Decimal32'
