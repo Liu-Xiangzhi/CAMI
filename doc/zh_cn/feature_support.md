@@ -8,6 +8,7 @@
 + 信号
 + `VLA`
 + flexible array member
++ 属性
 
 ## 修改的行为
 + `malloc` 被替换为类似 C++/Java 的 `new` 运算符，即动态分配对象时必须指定类型

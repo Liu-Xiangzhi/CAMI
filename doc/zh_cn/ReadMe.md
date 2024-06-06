@@ -72,13 +72,14 @@ ERROR: Undefined behavior
 + 信号
 + VLA
 + flexible array member
++ 属性
 
 同时，由于 C 标准对于 allocated 存储周期对象的 effective type 的规定和其他语义规定（如指针加法）存在一定的不自洽性，我们对 malloc 的行为进行了修改，修改后的行为和 C++/Java 的 new 运算符类似。
 
 更多关于特性支持、实现定义行为、本地化行为的信息参见[特性支持文档](./feature_support.md)。
 
 ### 检测目标
-我们的检测目标是所有在编译期不可确定的未定义行为。同时，由于部分特性未支持，我们剔除了未定义行为 5（数据竞争）、38（访问原子对象）、65（restrict相关）、66（restrict相关）、72（VLA相关），剩余未定义行为如下：
+我们的检测目标是所有在编译期不可确定的未定义行为。同时，由于部分特性未支持，我们剔除了未定义行为 5（数据竞争）、38（访问原子对象）、65（restrict相关）、66（restrict相关）、72（VLA相关）、83（属性相关），剩余未定义行为如下：
 
 + 9 An object is referred to outside of its lifetime
 + 10 The value of a pointer to an object whose lifetime has ended is used
@@ -89,12 +90,14 @@ ERROR: Undefined behavior
 + 17 Demotion of one real floating type to another produces a value outside the range that can be represented
 + 18 An lvalue does not designate an object when evaluated
 + 20 `@11` An lvalue designating an object of automatic storage duration that could have been declared with the register storage class is used in a context that requires the value of the designated object, but the object is uninitialized
++ 23 Conversion of a pointer to an integer type produces a value outside the range that can be represented
 + 24 Conversion between two pointer types produces a result that is incorrectly aligned
 + 25 A pointer is used to call a function whose type is not compatible with the referenced type
 + 32 The program attempts to modify a string literal
 + 34 A side effect on a scalar object is unsequenced relative to either a different side effect on the same scalar object or a value computation using the value of the same scalar object
 + 35 An exceptional condition occurs during the evaluation of an expression
 + 36 An object has its stored value accessed other than by an lvalue of an allowable type
++ 37 `@25` A function is defined with a type that is not compatible with the type (of the expression) pointed to by the expression that denotes the called function
 + 39 `@18` The operand of the unary \* operator has an invalid value
 + 41 `@35` The value of the second operand of the / or % operator is zero
 + 42 If the quotient a/b is not representable, the behavior of both a/b and a%b
@@ -102,6 +105,7 @@ ERROR: Undefined behavior
 + 44 `@18` Addition or subtraction of a pointer into, or just beyond, an array object and an integer type produces a result that points just beyond the array object and is used as the operand of a unary \* operator that is evaluated
 + 45 Pointers that do not point into, or just beyond, the same array object are subtracted
 + 46 An array subscript is out of range, even if an object is apparently accessible with the given subscript
++ 47 The result of subtracting two pointers is not representable in an object of type ptrdiff_t
 + 48 An expression is shifted by a negative number or by an amount greater than or equal to the width of the promoted expression
 + 49 An expression having signed promoted type is left-shifted and either the value of the expression is negative or the result of shifting would not be representable in the promoted type
 + 50 Pointers that do not point to the same aggregate or union (nor just beyond the same array object) are compared using relational operators
@@ -130,7 +134,6 @@ ERROR: Undefined behavior
 ## 构建
 注意：
 + 后文及本项目其他文档将用 `${PROJECT_ROOT}` 指代本项目根目录
-+ 本项目现仅可构建在类 Unix 平台下
 
 ### 对于 Arch/Manjaro Linux
 使用如下命令安装
