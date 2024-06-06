@@ -69,13 +69,14 @@ Considering to the workload, we do not support those features now (standard liba
 + signal
 + VLA
 + flexible array member
++ attribute
 
 Due to certain inconsistencies in the C standard regarding the effective type of allocated storage duration objects and other semantic rules (such as pointer arithmetic), we modified the behavior of `malloc` to resemble the behavior of the `new` operator in C++/Java.
 
 For more infomation of feature supporting, implementation-defined behavior and locale-specific behavior, see [feature support document](./doc/en_us/feature_support.md).
 
 ### Detection Target
-Our detection target is undefined behaviors that cannot be completely detected at compile time. Meanwhile, due to some unsupported feature, we eliminated UB 5(data race), 38(access subobject of atomic object), 65(restrict related), 66(restrict related), 72(VLA related). The remaining undefined behaviors are as follows:
+Our detection target is undefined behaviors that cannot be completely detected at compile time. Meanwhile, due to some unsupported feature, we eliminated UB 5(data race), 38(access subobject of atomic object), 65(restrict related), 66(restrict related), 72(VLA related), 83(attribute related). The remaining undefined behaviors are as follows:
 
 + 9 An object is referred to outside of its lifetime
 + 10 The value of a pointer to an object whose lifetime has ended is used
@@ -86,12 +87,14 @@ Our detection target is undefined behaviors that cannot be completely detected a
 + 17 Demotion of one real floating type to another produces a value outside the range that can be represented
 + 18 An lvalue does not designate an object when evaluated
 + 20 `@11` An lvalue designating an object of automatic storage duration that could have been declared with the register storage class is used in a context that requires the value of the designated object, but the object is uninitialized
++ 23 Conversion of a pointer to an integer type produces a value outside the range that can be represented
 + 24 Conversion between two pointer types produces a result that is incorrectly aligned
 + 25 A pointer is used to call a function whose type is not compatible with the referenced type
 + 32 The program attempts to modify a string literal
 + 34 A side effect on a scalar object is unsequenced relative to either a different side effect on the same scalar object or a value computation using the value of the same scalar object
 + 35 An exceptional condition occurs during the evaluation of an expression
 + 36 An object has its stored value accessed other than by an lvalue of an allowable type
++ 37 `@25` A function is defined with a type that is not compatible with the type (of the expression) pointed to by the expression that denotes the called function
 + 39 `@18` The operand of the unary \* operator has an invalid value
 + 41 `@35` The value of the second operand of the / or % operator is zero
 + 42 If the quotient a/b is not representable, the behavior of both a/b and a%b
@@ -99,6 +102,7 @@ Our detection target is undefined behaviors that cannot be completely detected a
 + 44 `@18` Addition or subtraction of a pointer into, or just beyond, an array object and an integer type produces a result that points just beyond the array object and is used as the operand of a unary \* operator that is evaluated
 + 45 Pointers that do not point into, or just beyond, the same array object are subtracted
 + 46 An array subscript is out of range, even if an object is apparently accessible with the given subscript
++ 47 The result of subtracting two pointers is not representable in an object of type ptrdiff_t
 + 48 An expression is shifted by a negative number or by an amount greater than or equal to the width of the promoted expression
 + 49 An expression having signed promoted type is left-shifted and either the value of the expression is negative or the result of shifting would not be representable in the promoted type
 + 50 Pointers that do not point to the same aggregate or union (nor just beyond the same array object) are compared using relational operators
@@ -120,7 +124,6 @@ where, the productivity metric is the geometric average of detection rate and 10
 ## Build
 Note:
 + let `${PROJECT_ROOT}` denote the root directory of this project, therebehind and other document.
-+ it can be built only under Unix-like platform now.
 
 ### For Arch/Manjaro Linux
 Run the following command to install.

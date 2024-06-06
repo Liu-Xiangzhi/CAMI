@@ -8,6 +8,7 @@
 + signal
 + VLA
 + flexible array member
++ attribute
 
 ## Modified Behavior
 + `malloc` is modified to resemble the behavior of the `new` operator in C++/Java, i.e., the type must be specified when creating allocated storage duration object.
