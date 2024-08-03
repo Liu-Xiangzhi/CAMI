@@ -1,144 +1,144 @@
 (* 3 Preprocessing directives *)
-preprocessing-file
+preprocessing_file
     = [ group ];
 
 group
-    = group-part
-    | group, group-part;
+    = group_part
+    | group, group_part;
 
-group-part
-    = if-section
-    | control-line
-    | text-line
-    | '#', non-directive;
+group_part
+    = if_section
+    | control_line
+    | text_line
+    | '#', non_directive;
 
-if-section
-    = if-group, [ elif-groups ], [ else-group ], endif-line;
+if_section
+    = if_group, [ elif_groups ], [ else_group ], endif_line;
 
-if-group
-    = '#', 'if', constant-expression, new-line, [ group ]
-    | '#', 'ifdef', identifier, new-line, [ group ]
-    | '#', 'ifndef', identifier, new-line, [ group ];
+if_group
+    = '#', 'if', constant_expression, new_line, [ group ]
+    | '#', 'ifdef', identifier, new_line, [ group ]
+    | '#', 'ifndef', identifier, new_line, [ group ];
 
-elif-groups
-    = elif-group
-    | elif-groups, elif-group;
+elif_groups
+    = elif_group
+    | elif_groups, elif_group;
 
-elif-group
-    = '#', 'elif', constant-expression, new-line, [ group ]
-    | '#', 'elifdef', identifier, new-line, [ group ]
-    | '#', 'elifndef', identifier, new-line, [ group ];
+elif_group
+    = '#', 'elif', constant_expression, new_line, [ group ]
+    | '#', 'elifdef', identifier, new_line, [ group ]
+    | '#', 'elifndef', identifier, new_line, [ group ];
 
-else-group
-    = '#', 'else', new-line, [ group ];
+else_group
+    = '#', 'else', new_line, [ group ];
 
-endif-line
-    = '#', 'endif', new-line;
+endif_line
+    = '#', 'endif', new_line;
 
-control-line
-    = '#', 'include', pp-tokens, new-line
-    | '#', 'embed', pp-tokens, new-line
-    | '#', 'define', identifier, replacement-list, new-line
-    | '#', 'define', identifier, lparen, [ identifier-list ], ')', replacement-list, new-line
-    | '#', 'define', identifier, lparen, '...', ')', replacement-list, new-line
-    | '#', 'define', identifier, lparen, identifier-list, ',', '...', ')', replacement-list, new-line
-    | '#', 'undef', identifier, new-line
-    | '#', 'line', pp-tokens, new-line
-    | '#', 'error', [ pp-tokens ], new-line
-    | '#', 'warning', [ pp-tokens ], new-line
-    | '#', 'pragma', [ pp-tokens ], new-line
-    | '#', new-line;
+control_line
+    = '#', 'include', pp_tokens, new_line
+    | '#', 'embed', pp_tokens, new_line
+    | '#', 'define', identifier, replacement_list, new_line
+    | '#', 'define', identifier, lparen, [ identifier_list ], ')', replacement_list, new_line
+    | '#', 'define', identifier, lparen, '...', ')', replacement_list, new_line
+    | '#', 'define', identifier, lparen, identifier_list, ',', '...', ')', replacement_list, new_line
+    | '#', 'undef', identifier, new_line
+    | '#', 'line', pp_tokens, new_line
+    | '#', 'error', [ pp_tokens ], new_line
+    | '#', 'warning', [ pp_tokens ], new_line
+    | '#', 'pragma', [ pp_tokens ], new_line
+    | '#', new_line;
 
-text-line
-    = [ pp-tokens ], new-line;
+text_line
+    = [ pp_tokens ], new_line;
 
-non-directive
-    = pp-tokens, new-line;
+non_directive
+    = pp_tokens, new_line;
 
 lparen
     = ? a '(' character not immediately preceded by white space ?;
 
-replacement-list
-    = [ pp-tokens ];
+replacement_list
+    = [ pp_tokens ];
 
-pp-tokens
-    = preprocessing-token
-    | pp-tokens, preprocessing-token;
+pp_tokens
+    = preprocessing_token
+    | pp_tokens, preprocessing_token;
 
-new-line
-    = ? the new-line character ?;
+new_line
+    = ? the new_line character ?;
 
-identifier-list
+identifier_list
     = identifier
-    | identifier-list, ',', identifier;
+    | identifier_list, ',', identifier;
 
-pp-parameter
-    = pp-parameter-name, [ pp-parameter-clause ];
+pp_parameter
+    = pp_parameter_name, [ pp_parameter_clause ];
 
-pp-parameter-name
-    = pp-standard-parameter
-    | pp-prefixed-parameter;
+pp_parameter_name
+    = pp_standard_parameter
+    | pp_prefixed_parameter;
 
-pp-standard-parameter
+pp_standard_parameter
     = identifier;
 
-pp-prefixed-parameter
+pp_prefixed_parameter
     = identifier, '::', identifier;
 
-pp-parameter-clause
-    = '(', [ pp-balanced-token-sequence ], ')';
+pp_parameter_clause
+    = '(', [ pp_balanced_token_sequence ], ')';
 
-pp-balanced-token-sequence
-    = pp-balanced-token
-    | pp-balanced-token-sequence, pp-balanced-token;
+pp_balanced_token_sequence
+    = pp_balanced_token
+    | pp_balanced_token_sequence, pp_balanced_token;
 
-pp-balanced-token
-    = '(', [ pp-balanced-token-sequence ], ')'
-    | '[', [ pp-balanced-token-sequence ], ']'
-    | '{', [ pp-balanced-token-sequence ], '}'
-    | ? any pp-token other than a parenthesis , a bracket , or a brace ?;
+pp_balanced_token
+    = '(', [ pp_balanced_token_sequence ], ')'
+    | '[', [ pp_balanced_token_sequence ], ']'
+    | '{', [ pp_balanced_token_sequence ], '}'
+    | ? any pp_token other than a parenthesis , a bracket , or a brace ?;
 
-embed-parameter-sequence
-    = pp-parameter
-    | embed-parameter-sequence, pp-parameter;
+embed_parameter_sequence
+    = pp_parameter
+    | embed_parameter_sequence, pp_parameter;
 
-defined-macro-expression
+defined_macro_expression
     = 'defined', identifier
     | 'defined', '(', identifier, ')';
 
-h-preprocessing-token
-    = ? any preprocessing-token other than > ?;
+h_preprocessing_token
+    = ? any preprocessing_token other than > ?;
 
-h-pp-tokens
-    = h-preprocessing-token
-    | h-pp-tokens, h-preprocessing-token;
+h_pp_tokens
+    = h_preprocessing_token
+    | h_pp_tokens, h_preprocessing_token;
 
-header-name-tokens
-    = string-literal
-    | '<', h-pp-tokens, '>';
+header_name_tokens
+    = string_literal
+    | '<', h_pp_tokens, '>';
 
-has-include-expression
-    = '__has_include', '(', header-name, ')'
-    | '__has_include', '(', header-name-tokens, ')';
+has_include_expression
+    = '__has_include', '(', header_name, ')'
+    | '__has_include', '(', header_name_tokens, ')';
 
-has-embed-expression
-    = '__has_embed', '(', header-name, [ embed-parameter-sequence ], ')'
-    | '__has_embed', '(', header-name-tokens, [ pp-balanced-token-sequence ], ')';
+has_embed_expression
+    = '__has_embed', '(', header_name, [ embed_parameter_sequence ], ')'
+    | '__has_embed', '(', header_name_tokens, [ pp_balanced_token_sequence ], ')';
 
-has-c-attribute-express
-    = '__has_c_attribute', '(', pp-tokens, ')';
+has_c_attribute_express
+    = '__has_c_attribute', '(', pp_tokens, ')';
 
-va-opt-replacement
-    = '__VA_OPT__', '(', [ pp-tokens ], ')';
+va_opt_replacement
+    = '__VA_OPT__', '(', [ pp_tokens ], ')';
 
-standard-pragma
-    = '#', 'pragma', 'STDC', 'FP_CONTRACT', on-off-switch
-    | '#', 'pragma', 'STDC', 'FENV_ACCESS', on-off-switch
-    | '#', 'pragma', 'STDC', 'FENV_DEC_ROUND', dec-direction
+standard_pragma
+    = '#', 'pragma', 'STDC', 'FP_CONTRACT', on_off_switch
+    | '#', 'pragma', 'STDC', 'FENV_ACCESS', on_off_switch
+    | '#', 'pragma', 'STDC', 'FENV_DEC_ROUND', dec_direction
     | '#', 'pragma', 'STDC', 'FENV_ROUND', direction
-    | '#', 'pragma', 'STDC', 'CX_LIMITED_RANGE', on-off-switch;
+    | '#', 'pragma', 'STDC', 'CX_LIMITED_RANGE', on_off_switch;
 
-on-off-switch
+on_off_switch
     = 'ON'
     | 'OFF'
     | 'DEFAULT';
@@ -151,11 +151,10 @@ direction
     | 'FE_UPWARD'
     | 'FE_DYNAMIC';
 
-dec-direction
+dec_direction
     = 'FE_DEC_DOWNWARD'
     | 'FE_DEC_TONEAREST'
     | 'FE_DEC_TONEARESTFROMZERO'
     | 'FE_DEC_TOWARDZERO'
     | 'FE_DEC_UPWARD'
     | 'FE_DEC_DYNAMIC';
-
