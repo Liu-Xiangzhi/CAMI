@@ -930,7 +930,7 @@ iteration_statement
     = 'while', '(', expression, ')', secondary_block
     | 'do', secondary_block, 'while', '(', expression, ')', ';'
     | 'for', '(', [ expression ], ';', [ expression ], ';', [ expression ], ')', secondary_block
-    | 'for', '(', declaration, [ expression ], ';', [ expression ], ')', secondary_block;
+    | 'for', '(', declaration, ';', [ expression ], ';', [ expression ], ')', secondary_block;
 
 jump_statement
     = 'goto', identifier, ';'
