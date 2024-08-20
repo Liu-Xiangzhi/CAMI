@@ -1,4 +1,5 @@
-type t
+type state
+type 'a t
 
-val create : Preprocessor.t -> t
-val next_token : t -> (Token.t * t) option
+val create : Preprocessor.state -> state
+val next_token : state -> Token.t option * state

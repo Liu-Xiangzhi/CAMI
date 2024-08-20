@@ -1,9 +1,11 @@
-type t
+type state
+type 'a t
 
 type pchar = {
   v : Uchar.t;
-  pos : Token.postion;
+  pos : Token.position;
 }
 
-val create : Unicode.string -> t
-val next_pchar : t -> (pchar * t) option
+val create : Unicode.string -> state
+val next_pchar : state -> pchar option * state
+val show : pchar -> string

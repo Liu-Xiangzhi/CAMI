@@ -3,17 +3,18 @@ open Camic
 let rec read_utf32_string_from_channel channel =
   let get_byte () =
     try input_byte channel
-    with End_of_file -> raise @@ Exception.AbortCompilation "Invalid encoding format of source, trailing bytes exists"
+    with End_of_file -> raise @@ Exception.AbortCompilation "[encoding]Invalid UTF32 encoding of source, trailing bytes exists"
   and input_byte_opt () = try Option.some @@ input_byte channel with End_of_file -> Option.None in
   match input_byte_opt () with
   | None -> []
-  | Some b1 -> (
+  | Some b1 ->
       let b2 = get_byte () in
       let b3 = get_byte () in
       let b4 = get_byte () in
       let codepoint = (b4 lsl 24) lor (b3 lsl 16) lor (b2 lsl 8) lor b1 in
-      try Uchar.of_int codepoint :: read_utf32_string_from_channel channel
-      with Invalid_argument s -> raise @@ Exception.AbortCompilation s)
+      if not (Uchar.is_valid codepoint) then
+        raise @@ Exception.AbortCompilation "[encoding]Invalid UTF32 encoding of source, invalid codepoint"
+      else Uchar.of_int codepoint :: read_utf32_string_from_channel channel
 
 let read_utf32_string channel_name =
   let channel = if channel_name <> "" then open_in_bin channel_name else stdin in
@@ -25,16 +26,23 @@ let read_utf32_string channel_name =
     close_in_noerr channel;
     raise e
 
+let show_preprocess_result pps_state =
+  let open Lex.Preprocessor in
+  let rec repeate st =
+    let pchar, st' = next_pchar st in
+    match pchar with
+    | None -> ()
+    | Some v ->
+        print_endline @@ show v;
+        repeate st'
+  in
+  repeate pps_state
+
 let main argv =
   let open Lex in
   let channel_name = if Array.length argv > 1 then argv.(1) else "" in
-  let _ = Preprocessor.create @@ read_utf32_string channel_name in
-  ()
-(* Preprocessor.preprocess pps
-   |> Array.iter (fun (pchar : Preprocessor.pchar) ->
-          Printf.printf "%s in %s %d:%d\n"
-            (Unicode.uchar_to_u8_string pchar.v)
-            pchar.pos.file pchar.pos.line pchar.pos.column) *)
+  let st = Preprocessor.create @@ read_utf32_string channel_name in
+  show_preprocess_result st
 
 let () =
   try main Sys.argv

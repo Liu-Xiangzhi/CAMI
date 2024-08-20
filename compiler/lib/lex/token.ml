@@ -1,4 +1,4 @@
-type postion = {
+type position = {
   file : string;
   line : int;
   column : int;
@@ -12,11 +12,12 @@ type character =
   | Wide of int
 
 type string_literal =
-  | Mulitbyte of char array
-  | U8 of char array
-  | U16 of int array
-  | U32 of int array
-  | Wide of int array
+  | Mulitbyte of string
+  | U8 of string
+  | U16 of Unicode.string
+  | U32 of Unicode.string
+  | Wide of Unicode.string
+  | Underdeterminate of Unicode.string * Unicode.string
 
 type value =
   | Identifier of Unicode.string
@@ -37,6 +38,7 @@ type value =
   | Auto
   | False
   | Sizeof
+  | Static
   | While
   | Bool
   | Float
@@ -130,6 +132,6 @@ type value =
   | Comma
 
 type t = {
-  position : postion;
+  position : position;
   value : value;
 }

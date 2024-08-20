@@ -1,4 +1,15 @@
-type string = Uchar.t array
+type string = Uchar.t array (* utf32 string *)
+
+module Map = Map.Make (struct
+  type t = Uchar.t array
+
+  let compare a b =
+    let len_a = Array.length a in
+    let len_b = Array.length b in
+    let len = min len_a len_b in
+    let rec comp i = if i >= len then len_a - len_b else if a.(i) <> b.(i) then Uchar.to_int a.(i) - Uchar.to_int b.(i) else comp (i + 1) in
+    comp 0
+end)
 
 let is_xid_start = Uucp.Id.is_xid_start
 let is_xid_continue = Uucp.Id.is_xid_continue
@@ -36,7 +47,46 @@ let to_u8_bytes ustr =
   done;
   Buffer.to_bytes buf
 
+let of_ascii str =
+  let arr = Array.make (String.length str) (Uchar.of_int 0) in
+  for i = 0 to String.length str do
+    assert (int_of_char str.[i] < 0x80);
+    Array.set arr i (Uchar.of_char str.[i])
+  done;
+  arr
+
+(*
+to_string means "bytelize" i.e. reinterpret a u32/u16 array to u8 array
+Not used yet
+
+let to_bytes ustr char_len ~little_endian =
+  let bytes = Bytes.create (Array.length ustr * char_len) in
+  for i = 0 to Array.length ustr - 1 do
+    for j = 0 to char_len - 1 do
+      let shift = if little_endian then j * 8 else (char_len - j - 1) * 8 in
+      Bytes.set bytes ((i * char_len) + j) @@ char_of_int ((Uchar.to_int ustr.(i) lsr shift) land 0xff)
+    done
+  done;
+  bytes
+
+let to_string ustr char_len ~little_endian = String.of_bytes @@ to_bytes ustr char_len ~little_endian *)
 let to_u8_string ustr = String.of_bytes @@ to_u8_bytes ustr
+
+let to_u16_string ustr =
+  let len = Array.length ustr + Array.fold_left (fun acc uc -> acc + if Uchar.to_int uc > 0x10000 then 1 else 0) 0 ustr in
+  let arr = Array.make len (Uchar.of_int 0) in
+  let j = ref 0 in
+  for i = 0 to Array.length ustr - 1 do
+    let v = Uchar.to_int ustr.(i) in
+    if v > 0x10000 then (
+      Array.set arr !j @@ Uchar.of_int (0xd800 + ((v - 0x10000) lsr 10));
+      Array.set arr (!j + 1) @@ Uchar.of_int (0xdc00 + ((v - 0x10000) land 0x3ff));
+      j := !j + 2)
+    else (
+      Array.set arr !j @@ ustr.(i);
+      j := !j + 1)
+  done;
+  arr
 
 let is_space uc =
   let v = Uchar.to_int uc in
@@ -124,3 +174,17 @@ let ( =? ) ustr str =
   else
     let rec comp i = if Stdlib.(i >= Array.length ustr) then true else if ustr.(i) <> str.[i] then false else comp (i + 1) in
     comp 0
+
+let ( =! ) ustr str = not (ustr =? str)
+
+let ( === ) ustr1 ustr2 =
+  if Stdlib.(Array.length ustr1 <> Array.length ustr2) then false
+  else
+    let rec comp i =
+      if Stdlib.(i >= Array.length ustr1) then true
+      else if Stdlib.(Uchar.to_int ustr1.(i) <> Uchar.to_int ustr2.(i)) then false
+      else comp (i + 1)
+    in
+    comp 0
+
+let ( ==! ) ustr1 ustr2 = not (ustr1 === ustr2)

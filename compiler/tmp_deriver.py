@@ -50,7 +50,7 @@ def main(argv : list[str]):
             print(p.stdout.decode())
         return 0
     env = os.environ.copy()
-    env["OCAMLRUNPARAM"] = "b"
+    env["OCAMLRUNPARAM"] = env.get("OCAMLRUNPARAM", "") + "b"
     if len(argv) > 1 and argv[1] == 'debug':
         with open('/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin', 'wb') as f:
             f.write(p.stdout.decode().encode('utf-32-le'))
@@ -63,3 +63,4 @@ def main(argv : list[str]):
 if __name__ == '__main__':
     import sys
     exit(main(sys.argv))
+
