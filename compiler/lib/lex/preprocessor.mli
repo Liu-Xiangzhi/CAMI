@@ -8,4 +8,5 @@ type pchar = {
 
 val create : Unicode.string -> state
 val next_pchar : state -> pchar option * state
+val current_position: state -> Token.position
 val show : pchar -> string

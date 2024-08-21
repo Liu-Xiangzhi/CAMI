@@ -38,6 +38,19 @@ let show_preprocess_result pps_state =
   in
   repeate pps_state
 
+let show_tokenize_reuslt lexer_state =
+  let open Lex.Lexer in
+  let open Lex.Token in
+  let rec repeate st =
+    let tk, st' = next_token st in
+    match tk with
+    | None -> ()
+    | Some v ->
+        print_endline @@ show v;
+        repeate st'
+  in
+  repeate lexer_state
+
 let main argv =
   let open Lex in
   let channel_name = if Array.length argv > 1 then argv.(1) else "" in

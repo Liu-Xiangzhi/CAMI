@@ -13,7 +13,7 @@ end)
 
 let is_xid_start = Uucp.Id.is_xid_start
 let is_xid_continue = Uucp.Id.is_xid_continue
-
+let max = Uchar.to_int Uchar.max
 let u8_len uc =
   let v = Uchar.to_int uc in
   if v <= 0x7f then 1 else if v <= 0x7ff then 2 else if v <= 0xffff then 3 else 4
@@ -100,6 +100,14 @@ let is_space uc =
 let is_digit uc =
   let v = Uchar.to_int uc in
   v >= int_of_char '0' && v <= int_of_char '9'
+
+let is_binary_digit uc =
+  let v = Uchar.to_int uc in
+  v >= int_of_char '0' && v <= int_of_char '1'
+
+let is_octal_digit uc =
+  let v = Uchar.to_int uc in
+  v >= int_of_char '0' && v <= int_of_char '7'
 
 let is_hex_digit uc =
   is_digit uc

@@ -42,7 +42,6 @@ type value =
   | While
   | Bool
   | Float
-  | Ftatic
   | Atomic
   | Break
   | For
@@ -130,8 +129,125 @@ type value =
   | XorAssign
   | OrAssign
   | Comma
+  | Hash
+  | HashHash
 
 type t = {
   position : position;
   value : value;
 }
+
+let show tk =
+  let show_value v =
+    match v with
+    | Identifier ustr -> "<Identifier> " ^ Unicode.to_u8_string ustr
+    | Integer _ -> "<Integer> " (*Todo*)
+    | Floating _ -> "<Float> " (*Todo*)
+    | Character _ -> "<Character> " (*Todo*)
+    | StringLiteral _ -> "<StringLiteral> " (*Todo*)
+    | Pragma _ -> "<Pragma> " (*Todo*)
+    | Alignas -> "<Keywords> alignas"
+    | Enum -> "<Keywords> enum"
+    | Short -> "<Keywords> short"
+    | Void -> "<Keywords> void"
+    | Alignof -> "<Keywords> alignof"
+    | Extern -> "<Keywords> extern"
+    | Signed -> "<Keywords> signed"
+    | Volatile -> "<Keywords> volatile"
+    | Auto -> "<Keywords> auto"
+    | False -> "<Keywords> false"
+    | Sizeof -> "<Keywords> sizeof"
+    | Static -> "<Keywords> static"
+    | While -> "<Keywords> while"
+    | Bool -> "<Keywords> bool"
+    | Float -> "<Keywords> float"
+    | Atomic -> "<Keywords> atomic"
+    | Break -> "<Keywords> break"
+    | For -> "<Keywords> for"
+    | StaticAssert -> "<Keywords> static_assert"
+    | BitInt -> "<Keywords> _BitInt"
+    | Case -> "<Keywords> case"
+    | Goto -> "<Keywords> goto"
+    | Struct -> "<Keywords> struct"
+    | Complex -> "<Keywords> _Complex"
+    | Char -> "<Keywords> char"
+    | If -> "<Keywords> if"
+    | Switch -> "<Keywords> switch"
+    | Decimal128 -> "<Keywords> _Decimal128"
+    | Const -> "<Keywords> const"
+    | Inline -> "<Keywords> inline"
+    | ThreadLocal -> "<Keywords> thread_local"
+    | Decimal32 -> "<Keywords> _Decimal32"
+    | Constexpr -> "<Keywords> constexpr"
+    | Int -> "<Keywords> int"
+    | True -> "<Keywords> true"
+    | Decimal64 -> "<Keywords> _Decimal64"
+    | Continue -> "<Keywords> continue"
+    | Long -> "<Keywords> long"
+    | Typedef -> "<Keywords> typedef"
+    | Generic -> "<Keywords> _Generic"
+    | Default -> "<Keywords> default"
+    | Nullptr -> "<Keywords> nullptr"
+    | Typeof -> "<Keywords> typeof"
+    | Imaginary -> "<Keywords> _Imaginary"
+    | Do -> "<Keywords> do"
+    | Register -> "<Keywords> register"
+    | TypeofUnqual -> "<Keywords> typeof_unqual"
+    | Noreturn -> "<Keywords> _Noreturn"
+    | Double -> "<Keywords> double"
+    | Restrict -> "<Keywords> restrict"
+    | Union -> "<Keywords> union"
+    | Else -> "<Keywords> else"
+    | Return -> "<Keywords> return"
+    | Unsigned -> "<Keywords> unsigned"
+    | LBracket -> "<Punctuator> ["
+    | RBracket -> "<Punctuator> ]"
+    | LParen -> "<Punctuator> )"
+    | RParen -> "<Punctuator> ("
+    | LBrace -> "<Punctuator> {"
+    | RBrace -> "<Punctuator> }"
+    | Dot -> "<Punctuator> ."
+    | Arrow -> "<Punctuator> ->"
+    | AddAdd -> "<Punctuator> ++"
+    | SubSub -> "<Punctuator> --"
+    | BitwiseAnd -> "<Punctuator> &"
+    | Mul -> "<Punctuator> *"
+    | Add -> "<Punctuator> +"
+    | Sub -> "<Punctuator> -"
+    | Tilde -> "<Punctuator> ~"
+    | Exclamation -> "<Punctuator> !"
+    | Div -> "<Punctuator> /"
+    | Mod -> "<Punctuator> %"
+    | LShift -> "<Punctuator> <<"
+    | RShift -> "<Punctuator> >>"
+    | Less -> "<Punctuator> <"
+    | Great -> "<Punctuator> >"
+    | LessEqual -> "<Punctuator> <="
+    | GreatEqual -> "<Punctuator> >="
+    | Equal -> "<Punctuator> ="
+    | NotEqual -> "<Punctuator> !="
+    | Xor -> "<Punctuator> ^"
+    | BitwiseOr -> "<Punctuator> |"
+    | And -> "<Punctuator> &&"
+    | Or -> "<Punctuator> ||"
+    | Question -> "<Punctuator> ?"
+    | Colon -> "<Punctuator> :"
+    | ColonColon -> "<Punctuator> ::"
+    | Semicolon -> "<Punctuator> ;"
+    | TripleDot -> "<Punctuator> ..."
+    | Assign -> "<Punctuator> ="
+    | MulAssign -> "<Punctuator> *="
+    | DivAssign -> "<Punctuator> /="
+    | ModAssign -> "<Punctuator> %="
+    | AddAssign -> "<Punctuator> +="
+    | SubAssign -> "<Punctuator> -="
+    | LShiftAssign -> "<Punctuator> <<="
+    | RShiftAssign -> "<Punctuator> >>="
+    | AndAssign -> "<Punctuator> &="
+    | XorAssign -> "<Punctuator> ^+"
+    | OrAssign -> "<Punctuator> |="
+    | Comma -> "<Punctuator> ,"
+    | Hash -> "<Punctuator> #"
+    | HashHash -> "<Punctuator> ##"
+  in
+  Printf.sprintf "Token %s at %s %d:%d" (show_value tk.value) tk.position.file tk.position.line tk.position.column

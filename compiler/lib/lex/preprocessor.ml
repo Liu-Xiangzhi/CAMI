@@ -108,3 +108,5 @@ let next_pchar st = run (pchar ()) st
 let show pchar =
   Printf.sprintf "%s 0x%x in %s %d:%d" (Unicode.uchar_to_u8_string pchar.v) (Uchar.to_int pchar.v) pchar.pos.file pchar.pos.line
     pchar.pos.column
+
+let current_position (st: state) = st.pos
