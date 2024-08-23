@@ -50,13 +50,14 @@ def main(argv : list[str]):
             print(p.stdout.decode())
         return 0
     env = os.environ.copy()
-    env["OCAMLRUNPARAM"] = env.get("OCAMLRUNPARAM", "") + "b"
+    ocamlrunparam = env.get("OCAMLRUNPARAM", "")
+    env["OCAMLRUNPARAM"] =  "b" if ocamlrunparam == "" else "b," + ocamlrunparam
     if len(argv) > 1 and argv[1] == 'debug':
         with open('/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin', 'wb') as f:
             f.write(p.stdout.decode().encode('utf-32-le'))
         subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/compiler/_build/default/lib', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin'], env=env)
     else:
-        subprocess.run(['/home/liuxiangzhi/projects/cami/compiler/_build/install/default/bin/camic'], input=p.stdout.decode().encode('utf-32-le'), env=env)
+        subprocess.run(['/home/liuxiangzhi/projects/cami/compiler/_build/install/default/bin/camic', '-show_preprocess'], input=p.stdout.decode().encode('utf-32-le'), env=env)
     return 0
         
 

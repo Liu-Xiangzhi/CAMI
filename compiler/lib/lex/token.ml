@@ -4,27 +4,28 @@ type position = {
   column : int;
 }
 
-type character =
-  | Mulitbyte of char
-  | U8 of char
-  | U16 of int
-  | U32 of int
-  | Wide of int
+(* type character =
+     | Mulitbyte of char
+     | U8 of char
+     | U16 of int
+     | U32 of int
+     | Wide of int
 
-type string_literal =
-  | Mulitbyte of string
-  | U8 of string
-  | U16 of Unicode.string
-  | U32 of Unicode.string
-  | Wide of Unicode.string
-  | Underdeterminate of Unicode.string * Unicode.string
+   type string_literal =
+     | Mulitbyte of string
+     | U8 of string
+     | U16 of Unicode.string
+     | U32 of Unicode.string
+     | Wide of Unicode.string
+     | Underdeterminate of Unicode.string * Unicode.string *)
 
 type value =
   | Identifier of Unicode.string
-  | Integer of Value.integer
-  | Floating of Value.floating
-  | Character of character
-  | StringLiteral of string_literal
+  | Integer of Value.t
+  | Floating of Value.t
+  | Character of Value.t
+  | StringLiteral of Value.t
+  | UnderdeterminateStringLiteral of Unicode.string * Unicode.string
   | Pragma of Unicode.string array
   (* keywords *)
   | Alignas
@@ -141,11 +142,11 @@ let show tk =
   let show_value v =
     match v with
     | Identifier ustr -> "<Identifier> " ^ Unicode.to_u8_string ustr
-    | Integer _ -> "<Integer> " (*Todo*)
-    | Floating _ -> "<Float> " (*Todo*)
-    | Character _ -> "<Character> " (*Todo*)
-    | StringLiteral _ -> "<StringLiteral> " (*Todo*)
-    | Pragma _ -> "<Pragma> " (*Todo*)
+    | Integer i -> "<Integer> " ^ Value.show i
+    | Floating f -> "<Float> " ^ Value.show f
+    | Character c -> "<Character> " ^ Value.show c
+    | StringLiteral sl -> "<StringLiteral> " ^ Value.show sl
+    | Pragma payloads -> "<Pragma> " ^ (Array.fold_left (fun acc x -> Unicode.to_u8_string x :: acc) [] payloads |> String.concat " ")
     | Alignas -> "<Keywords> alignas"
     | Enum -> "<Keywords> enum"
     | Short -> "<Keywords> short"
@@ -249,5 +250,6 @@ let show tk =
     | Comma -> "<Punctuator> ,"
     | Hash -> "<Punctuator> #"
     | HashHash -> "<Punctuator> ##"
+    | _ -> assert false
   in
   Printf.sprintf "Token %s at %s %d:%d" (show_value tk.value) tk.position.file tk.position.line tk.position.column

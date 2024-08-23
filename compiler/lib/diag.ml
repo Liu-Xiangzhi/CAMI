@@ -1,1 +1,0 @@
-(* only diagnose for semantic errors, encoding, lexical, and syntax error will cause the abort of compilation *)

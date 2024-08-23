@@ -49,7 +49,7 @@ let to_u8_bytes ustr =
 
 let of_ascii str =
   let arr = Array.make (String.length str) (Uchar.of_int 0) in
-  for i = 0 to String.length str do
+  for i = 0 to String.length str - 1 do
     assert (int_of_char str.[i] < 0x80);
     Array.set arr i (Uchar.of_char str.[i])
   done;

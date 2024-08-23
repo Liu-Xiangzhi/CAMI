@@ -82,7 +82,7 @@ let change_pos =
   let$ st = get () in
   let line = extract_current_line st in
   match parse_line_controll_directive line with
-  | None -> raise @@ Exception.AbortCompilation (Printf.sprintf "[LexPreprocess]invalid line control directive at line %d" st.physical_line)
+  | None -> Diag.preprocess st.physical_line "invalid line control directive at line"
   | Some pos -> set { st with current = st.current + Array.length line + 1 (* the newline *); pos; physical_line = st.physical_line + 1 }
 
 let rec pchar () =

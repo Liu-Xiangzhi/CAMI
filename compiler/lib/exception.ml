@@ -1,1 +1,0 @@
-exception AbortCompilation of string
