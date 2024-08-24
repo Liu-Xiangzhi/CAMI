@@ -57,7 +57,8 @@ def main(argv : list[str]):
             f.write(p.stdout.decode().encode('utf-32-le'))
         subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/compiler/_build/default/lib', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin'], env=env)
     else:
-        subprocess.run(['/home/liuxiangzhi/projects/cami/compiler/_build/install/default/bin/camic', '-show_preprocess'], input=p.stdout.decode().encode('utf-32-le'), env=env)
+        p = subprocess.run(['/home/liuxiangzhi/projects/cami/compiler/_build/install/default/bin/camic'], input=p.stdout.decode().encode('utf-32-le'), env=env)
+        return p.returncode
     return 0
         
 

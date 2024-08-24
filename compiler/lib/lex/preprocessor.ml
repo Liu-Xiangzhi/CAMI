@@ -22,9 +22,6 @@ open Preprocessor
 
 let ( let* ) = Option.bind
 let ( let$ ) = ( >>= )
-
-(* lift instance of MaybeT *)
-let create ustr = { source = ustr; current = 0; pos = { file = ""; line = 1; column = 1 }; physical_line = 1 }
 let has_n_char st n = st.current + n < Array.length st.source
 let next st n = if has_n_char st n then Some st.source.(st.current + n) else None
 let current st = next st 0
@@ -109,4 +106,17 @@ let show pchar =
   Printf.sprintf "%s 0x%x in %s %d:%d" (Unicode.uchar_to_u8_string pchar.v) (Uchar.to_int pchar.v) pchar.pos.file pchar.pos.line
     pchar.pos.column
 
-let current_position (st: state) = st.pos
+let current_position (st : state) = st.pos
+
+let create ustr =
+  let dummy = { source = ustr; current = 0; pos = { file = ""; line = 1; column = 1 }; physical_line = 1 } in
+  let rec skip_leading_line_controll_directives () =
+    let open Unicode in
+    let$ st = get () in
+    match current st with
+    | Some uc when uc = '#' && Stdlib.(st.pos.column = 1) && Option.value (next st 1) ~default:(Uchar.of_int 0) = ' ' ->
+        advance 2 >> change_pos >> skip_leading_line_controll_directives ()
+    | _ -> return ()
+  in
+  let _, st = run (skip_leading_line_controll_directives ()) dummy in
+  st

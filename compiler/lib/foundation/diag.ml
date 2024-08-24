@@ -13,5 +13,5 @@ let preprocess line ?column msg =
 let lexical (pos : Token.position) msg = raise @@ AbortCompilation (Printf.sprintf "%s:%d:%d: [Lexical Error]%s" pos.file pos.line pos.column msg)
 
 module Warning = struct
-  let lexical (pos : Token.position) msg = Printf.eprintf "\x1b[033m%s:%d:%d: [Lexical Warning]%s\x1b[0m" pos.file pos.line pos.column msg
+  let lexical (pos : Token.position) msg = Printf.eprintf "\x1b[033m%s:%d:%d: [Lexical Warning]%s\x1b[0m\n" pos.file pos.line pos.column msg
 end

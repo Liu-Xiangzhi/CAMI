@@ -13,6 +13,8 @@ module Lexer = State_monad.Make (LexerState)
 
 type 'a t = 'a Lexer.t
 
+let create pps_state = { pps_state }
+
 open Lexer
 
 let keywords_map =
@@ -93,6 +95,13 @@ let ( let$* ) m f =
   if Option.is_none v then return None else f (Option.get v)
 
 let ( let@ ) x f = Option.map f x
+
+let ( |- ) a b =
+  let$ st = get () in
+  let$ v1 = a in
+  if Option.is_some v1 then return v1 else set st >> b
+
+let ( ~? ) a = a |- return None
 let some_if v pred = if pred then Some v else None
 
 let consume1 =
@@ -112,43 +121,47 @@ let consume n =
   in
   repeat 0
 
-let consume_if_equal_to str =
+let rec many m =
+  let$ v = ~?m in
+  match v with None -> return [] | Some v' -> List.cons v' <$> many m
+
+let many1 m =
+  let$* v = m in
+  let$ vs = many m in
+  return @@ Some (v :: vs)
+
+let take_if pred =
+  let$* pchar = consume1 in
+  return @@ some_if pchar (pred pchar)
+
+let rec consume_while pred =
+  let$ pchar = ~?(take_if pred) in
+  if Option.is_none pchar then return [] else List.cons (Option.get pchar) <$> consume_while pred
+
+let string_of str =
   let$* arr = consume @@ String.length str in
   if Unicode.(arr |> pchar_array_to_u32string =? str) then return @@ Some arr else return None
 
-(** weakly case insensitive version of 'consume_if_equal_to'. 'weakly' means mixture of upper and lower case is not considered equivalent *)
-let consume_if_equal_to' str =
+(** weakly case insensitive version of 'string_of'. 'weakly' means mixture of upper and lower case is not considered equivalent *)
+let string_of' str =
   let$* arr = consume @@ String.length str in
   let u32str = arr |> pchar_array_to_u32string in
   if Unicode.(u32str =? String.lowercase_ascii str || u32str =? String.uppercase_ascii str) then return @@ Some arr else return None
 
-let ( |- ) a b =
-  let$ st = get () in
-  let$ v1 = a in
-  if Option.is_some v1 then return v1 else set st >> b
+let string_of_any arr =
+  let rec any_of arr i = if i >= Array.length arr then return None else string_of arr.(i) |- any_of arr (i + 1) in
+  any_of arr 0
 
-let ( ~? ) a = a |- return None
-
-let consume_if_equal_to_any_of arr =
-  let rec do_consume_if_equal_to_any_of arr i =
-    if i >= Array.length arr then return None else consume_if_equal_to arr.(i) |- do_consume_if_equal_to_any_of arr (i + 1)
-  in
-  do_consume_if_equal_to_any_of arr 0
-
-let consume_if_equal_to_any_of' arr =
-  let rec do_consume_if_equal_to_any_of arr i =
-    if i >= Array.length arr then return None else consume_if_equal_to' arr.(i) |- do_consume_if_equal_to_any_of arr (i + 1)
-  in
-  do_consume_if_equal_to_any_of arr 0
-
-let create pps_state = { pps_state }
+let char_of c =
+  let$* pchar = consume1 in
+  if Unicode.(pchar.v = c) then return @@ Some pchar else return None
 
 let punctuator =
   let open Unicode in
   let open Token in
   let punctuator_n punc str =
     assert (Stdlib.(String.length str > 0));
-    let$* pchar_arr = consume_if_equal_to str in
+    let$* pchar_arr = string_of str in
     return @@ Some { position = pchar_arr.(0).pos; value = punc }
   in
   let obsolete_hashhash = punctuator_n HashHash "%:%:" in
@@ -199,15 +212,9 @@ let punctuator =
   obsolete_hashhash |- triple_dot |- left_shift_assgin |- right_shift_assgin |- regular_punctuator
 
 let basic_identifier : basic_identifier option t =
-  let$* pchar = consume1 in
-  if not Unicode.(is_xid_start pchar.v || pchar.v = '_') then return None
-  else
-    let rec take_xid_continue () =
-      let$ pchar_opt = ~?consume1 in
-      match pchar_opt with None -> return [] | Some pchar -> List.cons pchar.v <$> take_xid_continue ()
-    in
-    let$ xid_continues = take_xid_continue () in
-    return @@ Some { position = pchar.pos; v = Array.of_list (pchar.v :: xid_continues) }
+  let$* pchar = ~?(take_if (fun pchar -> Unicode.(is_xid_start pchar.v || pchar.v = '_'))) in
+  let$ xid_continues = consume_while (fun pchar -> Unicode.is_xid_continue pchar.v) in
+  return @@ Some { position = pchar.pos; v = Array.of_list (pchar.v :: List.map (fun (x : Preprocessor.pchar) -> x.v) xid_continues) }
 
 let identifier =
   let$* id = basic_identifier in
@@ -232,60 +239,50 @@ let number =
     in
     prefix' |- return @@ Some 10
   in
-  let digit_if f =
-    let$* d = consume1 in
-    return @@ some_if d (f d.v)
-  in
-  let delimiter =
-    let$* p = consume1 in
-    return @@ some_if () Unicode.(p.v = '\'')
-  in
+  let digit_if f = take_if (fun x -> f x.v) in
   let digit_sequence_if f =
-    let digit' = digit_if f in
-    let digit_with_delimiter = digit' |- (delimiter >> digit') in
-    let rec digit_sequence' () =
-      let$ d = digit_with_delimiter in
-      match d with None -> return [] | Some v -> List.cons v <$> digit_sequence' ()
+    let digit = digit_if f in
+    let digit_with_delimiter =
+      digit
+      |- let$* _ = char_of '\'' in
+         digit
     in
-    let$* d1 = digit' in
-    let$ ds = digit_sequence' () in
+    let$* d1 = digit in
+    let$ ds = many digit_with_delimiter in
     return @@ Some (d1 :: ds)
   in
   let digit_sequence = digit_sequence_if Unicode.is_digit in
   let hex_digit_sequence = digit_sequence_if Unicode.is_hex_digit in
+  let ( =??? ) uc c = Unicode.(uc = c || uc = Char.uppercase_ascii c) in
   let integer_suffix =
-    let unsigend = consume_if_equal_to' "u" in
-    let suffix = consume_if_equal_to_any_of' [| "l"; "ll"; "wb" |] in
-    let pattern1 =
-      let$* _ = unsigend in
-      let$ s = ~?suffix in
-      match s with None -> return @@ Some (true, [||]) | Some s' -> return @@ Some (true, s')
-    in
-    let pattern2 =
-      let$* s = suffix in
-      let$ u = unsigend in
-      return @@ Some (Option.is_some u, s)
-    in
-    pattern1 |- pattern2
+    let$ suffix = ~?basic_identifier in
+    match suffix with
+    | None -> return (false, [||])
+    | Some sfx when sfx.v.(0) =??? 'u' -> return (true, Array.sub sfx.v 1 (Array.length sfx.v - 1))
+    | Some sfx when sfx.v.(Array.length sfx.v - 1) =??? 'u' -> return (true, Array.sub sfx.v 0 (Array.length sfx.v - 1))
+    | Some sfx -> return (false, sfx.v)
   in
-  let float_suffix = consume_if_equal_to_any_of' [| "f"; "l"; "df"; "dd"; "dl" |] in
+  let float_suffix =
+    let$ suffix = ~?basic_identifier in
+    match suffix with None -> return [||] | Some sfx -> return sfx.v
+  in
   let exponent c =
-    let$* sym = consume_if_equal_to' (String.make 1 c) in
-    let$ sign = consume_if_equal_to_any_of [| "+"; "-" |] in
+    let$* sym = string_of' (String.make 1 c) in
+    let$ sign = ~?(string_of_any [| "+"; "-" |]) in
     let$* ds = digit_sequence in
     match sign with None -> return @@ Some (sym.(0) :: ds) | Some sgn -> return @@ Some (sym.(0) :: sgn.(0) :: ds)
   in
   let fractional_of sequence =
-    let$ ds1 = sequence in
+    let$ ds1 = ~?sequence in
     match ds1 with
     | None ->
-        let$* dot = consume_if_equal_to "." in
+        let$* dot = char_of '.' in
         let$* ds2 = sequence in
-        return @@ Some (dot.(0) :: ds2)
+        return @@ Some (dot :: ds2)
     | Some ds1' -> (
-        let$* dot = consume_if_equal_to "." in
-        let$ ds2 = sequence in
-        match ds2 with None -> return @@ Some (ds1' @ [ dot.(0) ]) | Some ds2' -> return @@ Some (ds1' @ [ dot.(0) ] @ ds2'))
+        let$* dot = char_of '.' in
+        let$ ds2 = ~?sequence in
+        match ds2 with None -> return @@ Some (ds1' @ [ dot ]) | Some ds2' -> return @@ Some (ds1' @ [ dot ] @ ds2'))
   in
   let fraction = fractional_of digit_sequence in
   let hex_fraction = fractional_of hex_digit_sequence in
@@ -297,7 +294,7 @@ let number =
   let dec_float =
     let pattern1 =
       let$* frac = fraction in
-      let$ exp = exponent 'e' in
+      let$ exp = ~?(exponent 'e') in
       match exp with None -> return @@ Some frac | Some exp' -> return @@ Some (frac @ exp')
     in
     let pattern2 =
@@ -311,7 +308,7 @@ let number =
   let ( =@ ) ustr str = Unicode.(ustr =? str || ustr =? String.uppercase_ascii str) in
   let floating is_hex =
     let$* num_ustr = if is_hex then hex_float else dec_float in
-    let$ sfx = ~?float_suffix in
+    let$ sfx = float_suffix in
     let open Token in
     let return_result ctor (to_string : ?is_hex:bool -> _) =
       let unwrap v =
@@ -320,14 +317,11 @@ let number =
       return @@ Some { position; value = Token.Floating (Value.Basic (ctor @@ unwrap @@ to_string ~is_hex num_ustr)) }
     in
     match sfx with
-    | None -> return_result (fun x -> BasicValue.Double x) BasicValue.Double.of_string
-    | Some value -> (
-        let v = pchar_array_to_u32string value in
-        match v with
-        | _ when v =@ "f" -> return_result (fun x -> BasicValue.Float x) BasicValue.Float.of_string
-        | _ when v =@ "l" -> return_result (fun x -> BasicValue.LongDouble x) BasicValue.LongDouble.of_string
-        | _ when v =@ "df" || v =@ "dd" || v =@ "dl" -> Diag.lexical position "Decimal floating type is not supported"
-        | _ -> Diag.lexical position "Invalid floating suffix")
+    | v when v =@ "" -> return_result (fun x -> BasicValue.Double x) BasicValue.Double.of_string
+    | v when v =@ "f" -> return_result (fun x -> BasicValue.Float x) BasicValue.Float.of_string
+    | v when v =@ "l" -> return_result (fun x -> BasicValue.LongDouble x) BasicValue.LongDouble.of_string
+    | v when v =@ "df" || v =@ "dd" || v =@ "dl" -> Diag.lexical position "Decimal floating type is not supported"
+    | _ -> Diag.lexical position "Invalid floating suffix"
   in
   let z_to_integer_token is_dec z suffix =
     let ( <=> ) a b = if Option.is_some a then a else b in
@@ -340,20 +334,18 @@ let number =
     make_token @@ unwrap
     @@
     match suffix with
-    | None ->
-        if is_dec then int_of_Z z <=> long_of_Z z <=> longlong_of_Z z
-        else int_of_Z z <=> uint_of_Z z <=> long_of_Z z <=> ulong_of_Z z <=> longlong_of_Z z <=> ulonglong_of_Z z
-    | Some (unsigned, sfx) when unsigned -> (
-        let v = pchar_array_to_u32string sfx in
+    | true, v -> (
         match v with
         | _ when v =? "" -> uint_of_Z z <=> ulong_of_Z z <=> ulonglong_of_Z z
         | _ when v =@ "l" -> ulong_of_Z z <=> ulonglong_of_Z z
         | _ when v =@ "ll" -> ulonglong_of_Z z
         | _ when v =@ "wb" -> Diag.lexical position "BitInt is not supported yet"
         | _ -> Diag.lexical position "Invalid integer suffix")
-    | Some (_, sfx) -> (
-        let v = pchar_array_to_u32string sfx in
+    | _, v -> (
         match v with
+        | _ when v =@ "" ->
+            if is_dec then int_of_Z z <=> long_of_Z z <=> longlong_of_Z z
+            else int_of_Z z <=> uint_of_Z z <=> long_of_Z z <=> ulong_of_Z z <=> longlong_of_Z z <=> ulonglong_of_Z z
         | _ when v =@ "l" ->
             if is_dec then long_of_Z z <=> longlong_of_Z z else long_of_Z z <=> ulong_of_Z z <=> longlong_of_Z z <=> ulonglong_of_Z z
         | _ when v =@ "ll" -> if is_dec then longlong_of_Z z else longlong_of_Z z <=> ulonglong_of_Z z
@@ -373,29 +365,23 @@ let number =
     in
     let$* num_list = digit_sequence_if pred in
     let num = num_list |> Array.of_list |> pchar_array_to_u32string |> Unicode.to_u8_string |> Z.of_string_base radix in
-    let$ sfx = ~?integer_suffix in
+    let$ sfx = integer_suffix in
     return @@ Some (z_to_integer_token (radix = 10) num sfx)
   in
   let$* radix = prefix in
   if radix = 10 || radix = 16 then floating (radix = 16) |- integer radix else integer radix
 
 let escaped_sequence =
-  let oct_digit =
-    let$* d = consume1 in
-    return @@ some_if d Unicode.(is_octal_digit d.v)
-  in
-  let hex_digit =
-    let$* d = consume1 in
-    return @@ some_if d Unicode.(is_octal_digit d.v)
-  in
+  let oct_digit = take_if (fun x -> Unicode.(is_octal_digit x.v)) in
+  let hex_digit = take_if (fun x -> Unicode.(is_hex_digit x.v)) in
   let octal =
     let to_int (d : Preprocessor.pchar) = Uchar.to_int d.v - int_of_char '0' in
     let$* d1 = oct_digit in
-    let$ d2 = oct_digit in
+    let$ d2 = ~?oct_digit in
     match d2 with
     | None -> return @@ Some d1.v
     | Some d2' -> (
-        let$ d3 = oct_digit in
+        let$ d3 = ~?oct_digit in
         match d3 with
         | None -> return @@ Some (Uchar.of_int ((to_int d1 * 8) + to_int d2'))
         | Some d3' -> return @@ Some (Uchar.of_int ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3')))
@@ -405,18 +391,18 @@ let escaped_sequence =
     let$ pos = gets (fun x -> Preprocessor.current_position x.pps_state) in
     let$* d1 = hex_digit in
     let rec hex' res =
-      let$ d = hex_digit in
+      let$ d = ~?hex_digit in
       match d with
-      | None -> return @@ Some res
+      | None -> return res
       | Some pchar ->
           if res > Unicode.max then Diag.lexical pos "too large hexdecimal escaped sequence(bigger than 0x10'ffff)"
           else hex' ((res * 16) + to_int pchar)
     in
-    let$* v = hex' @@ to_int d1 in
+    let$ v = hex' @@ to_int d1 in
     if v > Unicode.max then Diag.lexical pos "too large hexdecimal escaped sequence(bigger than 0x10'ffff)"
     else return @@ Some (Uchar.of_int v)
   in
-  let$* _ = consume_if_equal_to "\\" in
+  let$* _ = char_of '\\' in
   let$* pchar = consume1 in
   let open Unicode in
   match pchar.v with
@@ -431,30 +417,21 @@ let escaped_sequence =
   | c when c = 'x' -> hex
   | _ -> octal
 
-let encoding_prefix = consume_if_equal_to_any_of [| "u8"; "u"; "U"; "L" |]
+let encoding_prefix = string_of_any [| "u8"; "u"; "U"; "L" |]
 
 let character =
   let$ position = gets (fun x -> Preprocessor.current_position x.pps_state) in
-  let error_too_large_character_value = Diag.lexical position "Constant value is not representable in the corresponding code unit" in
+  let error_too_large_character_value () = Diag.lexical position "Constant value is not representable in the corresponding code unit" in
   let c_char =
     let regular_char =
-      let$* pchar = consume1 in
-      return @@ some_if pchar.v @@ not Unicode.(pchar.v = '\'' || pchar.v = '\\' || pchar.v = '\n')
+      Option.map (fun (x : Preprocessor.pchar) -> x.v)
+      <$> take_if (fun pchar -> Unicode.(pchar.v <> '\'' && pchar.v <> '\\' && pchar.v <> '\n'))
     in
     escaped_sequence |- regular_char
   in
-  let c_char_sequence =
-    let rec c_char_sequence' () =
-      let$ uc = ~?c_char in
-      match uc with None -> return [] | Some v -> List.cons v <$> c_char_sequence' ()
-    in
-    let$* c = c_char in
-    let$ cs = c_char_sequence' () in
-    return @@ Some (c :: cs)
-  in
   let$ encoding = ~?encoding_prefix in
-  let$* _ = consume_if_equal_to "'" in
-  let$* c_char_seq = c_char_sequence in
+  let$* _ = char_of '\'' in
+  let$* c_char_seq = many1 c_char in
   let char_value =
     match c_char_seq with
     | c :: [] -> Uchar.to_int c
@@ -473,42 +450,35 @@ let character =
   let open Token in
   let return_result v = return @@ Some { position; value = Character (Value.Basic v) } in
   match encoding with
-  | None -> if char_value > 0xff then error_too_large_character_value else return_result (BasicValue.Char (char_of_int char_value))
+  | None -> if char_value > 0xff then error_too_large_character_value () else return_result (BasicValue.Char (char_of_int char_value))
   | Some encoding' -> (
       let e = pchar_array_to_u32string encoding' in
       match e with
       | _ when Unicode.(e =? "u8") ->
-          if char_value > 0x7f then error_too_large_character_value else return_result (BasicValue.UChar (char_of_int char_value))
+          if char_value > 0x7f then error_too_large_character_value () else return_result (BasicValue.UChar (char_of_int char_value))
       | _ when Unicode.(e =? "u") ->
-          if char_value > 0xffff then error_too_large_character_value else return_result (BasicValue.of_uint16 (Int64.of_int char_value))
+          if char_value > 0xffff then error_too_large_character_value () else return_result (BasicValue.of_uint16 (Int64.of_int char_value))
       | _ when Unicode.(e =? "U") ->
-          if char_value > 0x10fffff then error_too_large_character_value else return_result (BasicValue.of_uint32 (Int64.of_int char_value))
+          if char_value > 0x10fffff then error_too_large_character_value ()
+          else return_result (BasicValue.of_uint32 (Int64.of_int char_value))
       | _ when Unicode.(e =? "L") ->
-          if char_value > 0xffff_ffff then error_too_large_character_value
+          if char_value > 0xffff_ffff then error_too_large_character_value ()
           else return_result (BasicValue.of_int32 (Int64.of_int char_value))
-      | _ -> Diag.lexical position "Invalid encoding prefix")
+      | _ -> assert false)
 
 let string_literal =
   let$ position = gets (fun x -> Preprocessor.current_position x.pps_state) in
   let s_char =
     let regular_char =
-      let$* pchar = consume1 in
-      return @@ some_if pchar.v @@ not Unicode.(pchar.v = '"' || pchar.v = '\\' || pchar.v = '\n')
+      Option.map (fun (x : Preprocessor.pchar) -> x.v)
+      <$> take_if (fun pchar -> Unicode.(pchar.v <> '"' && pchar.v <> '\\' && pchar.v <> '\n'))
     in
     escaped_sequence |- regular_char
   in
-  let s_char_sequence =
-    let rec s_char_sequence' () =
-      let$ uc = ~?s_char in
-      match uc with None -> return [] | Some v -> List.cons v <$> s_char_sequence' ()
-    in
-    let$* c = s_char in
-    let$ cs = s_char_sequence' () in
-    return @@ Some (c :: cs)
-  in
+  let s_char_sequence = many1 s_char in
   let$ encoding = ~?encoding_prefix in
   let encoding' = if Option.is_none encoding then [||] else Option.get encoding |> pchar_array_to_u32string in
-  let$* _ = consume_if_equal_to "\"" in
+  let$* _ = char_of '"' in
   let$* s_char_seq = s_char_sequence in
   let$ delimiter = consume1 in
   (match delimiter with
@@ -522,14 +492,11 @@ let string_literal =
 
 let error =
   let$* pchar = consume1 in
-  let pos = pchar.pos in
-  Diag.lexical pos "Failed to parse token"
+  Diag.lexical pchar.pos (Printf.sprintf "Failed to parse token %d" @@ int_of_char (Unicode.uchar_to_u8_string pchar.v).[0])
 
-let rec token' () = punctuator |- number |- character |- string_literal |- identifier |- spaces () |- error
-
-and spaces () =
-  let$* pchar = consume1 in
-  if Unicode.is_space pchar.v then token' () else return None
+let token' =
+  let$ _ = consume_while (fun p -> Unicode.is_space p.v) in
+  number |- punctuator |- character |- string_literal |- identifier |- error
 
 let concat_string_literal (string_literals : Token.t list) =
   let open Token in
@@ -594,7 +561,7 @@ let concat_string_literal (string_literals : Token.t list) =
 let token =
   let rec take_contiguous_string_literals () =
     let take_string_literal =
-      ~?(let$ tk = token' () in
+      ~?(let$ tk = token' in
          return @@ match tk with Some { value = Token.StringLiteral _; _ } as s -> s | _ -> None)
     in
     let$ tk = take_string_literal in
@@ -604,6 +571,6 @@ let token =
     let$ tk = take_contiguous_string_literals () in
     if List.is_empty tk then return None else return @@ Some (concat_string_literal tk)
   in
-  concatenated_string_literal |- token' ()
+  concatenated_string_literal |- token'
 
 let next_token st = run token st

@@ -14,6 +14,7 @@ end)
 let is_xid_start = Uucp.Id.is_xid_start
 let is_xid_continue = Uucp.Id.is_xid_continue
 let max = Uchar.to_int Uchar.max
+
 let u8_len uc =
   let v = Uchar.to_int uc in
   if v <= 0x7f then 1 else if v <= 0x7ff then 2 else if v <= 0xffff then 3 else 4
@@ -170,13 +171,16 @@ let int_of_string radix ustr =
   | Hexdecimal -> parse_digits (get_prefix_end_idx 'x') 0 ~char_to_int:hex_to_int ~base:16
   | _ -> assert false
 
+(** uchar compare with char *)
 let ( = ) uc c = uc = Uchar.of_char c
+
 let ( <> ) uc c = uc <> Uchar.of_char c
 let ( < ) uc c = Uchar.to_int uc < int_of_char c
 let ( <= ) uc c = Uchar.to_int uc <= int_of_char c
 let ( > ) uc c = Uchar.to_int uc > int_of_char c
 let ( >= ) uc c = Uchar.to_int uc >= int_of_char c
 
+(** uchar string compare with string *)
 let ( =? ) ustr str =
   if Stdlib.(Array.length ustr <> String.length str) then false
   else
@@ -185,6 +189,7 @@ let ( =? ) ustr str =
 
 let ( =! ) ustr str = not (ustr =? str)
 
+(** uchar compare with uchar string *)
 let ( === ) ustr1 ustr2 =
   if Stdlib.(Array.length ustr1 <> Array.length ustr2) then false
   else
