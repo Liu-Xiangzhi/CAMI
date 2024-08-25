@@ -43,16 +43,15 @@ let rec show = function
   | Pointer { obj = { name; _ }; offset } -> Printf.sprintf "pointer to '%s' with offset %d" (Unicode.to_u8_string name) offset
   | Pointer' { value; _ } -> Printf.sprintf "dissociative pointer with value %d" value
   | Array arr ->
-      let lst = Array.fold_left (fun acc x -> show x :: acc) [] arr in
+      let lst = Array.fold_right (fun x acc -> show x :: acc) arr [] in
       Printf.sprintf "[%s]" (String.concat "," lst)
   | Struct { tp; value } ->
       let (Type.Struct { name; members }) = tp [@@warning "-8"] in
       let lst =
-        Array.combine members value
-        |> Array.fold_left
-             (fun acc ((member_field, member_v) : Type.field * t) ->
-               Printf.sprintf "%s = %s" (Unicode.to_u8_string member_field.name) (show member_v) :: acc)
-             []
+        Array.fold_right
+          (fun ((member_field, member_v) : Type.field * t) acc ->
+            Printf.sprintf "%s = %s" (Unicode.to_u8_string member_field.name) (show member_v) :: acc)
+          (Array.combine members value) []
       in
       Printf.sprintf "struct %s{ %s }" (Unicode.to_u8_string name) (String.concat "; " lst)
   | Union { tp; value; activated_member_id } ->

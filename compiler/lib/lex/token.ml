@@ -4,21 +4,6 @@ type position = {
   column : int;
 }
 
-(* type character =
-     | Mulitbyte of char
-     | U8 of char
-     | U16 of int
-     | U32 of int
-     | Wide of int
-
-   type string_literal =
-     | Mulitbyte of string
-     | U8 of string
-     | U16 of Unicode.string
-     | U32 of Unicode.string
-     | Wide of Unicode.string
-     | Underdeterminate of Unicode.string * Unicode.string *)
-
 type value =
   | Identifier of Unicode.string
   | Integer of Value.t
@@ -146,7 +131,7 @@ let show tk =
     | Floating f -> "<Float> " ^ Value.show f
     | Character c -> "<Character> " ^ Value.show c
     | StringLiteral sl -> "<StringLiteral> " ^ Value.show sl
-    | Pragma payloads -> "<Pragma> " ^ (Array.fold_left (fun acc x -> Unicode.to_u8_string x :: acc) [] payloads |> String.concat " ")
+    | Pragma payloads -> "<Pragma> " ^ (Array.fold_right (fun x acc -> Unicode.to_u8_string x :: acc) payloads [] |> String.concat " ")
     | Alignas -> "<Keywords> alignas"
     | Enum -> "<Keywords> enum"
     | Short -> "<Keywords> short"

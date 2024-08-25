@@ -47,7 +47,7 @@ def main(argv : list[str]):
             with open('/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin', 'wb') as f:
                 f.write(p.stdout.decode().encode('utf-32-le'))
         else:
-            print(p.stdout.decode())
+            print(p.stdout.decode(), end="")
         return 0
     env = os.environ.copy()
     ocamlrunparam = env.get("OCAMLRUNPARAM", "")

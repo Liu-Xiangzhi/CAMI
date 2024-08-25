@@ -102,7 +102,6 @@ let ( |- ) a b =
   if Option.is_some v1 then return v1 else set st >> b
 
 let ( ~? ) a = a |- return None
-let some_if v pred = if pred then Some v else None
 
 let consume1 =
   let$ st = get () in
@@ -132,7 +131,7 @@ let many1 m =
 
 let take_if pred =
   let$* pchar = consume1 in
-  return @@ some_if pchar (pred pchar)
+  return @@ if pred pchar then Some pchar else None
 
 let rec consume_while pred =
   let$ pchar = ~?(take_if pred) in
@@ -155,6 +154,11 @@ let string_of_any arr =
 let char_of c =
   let$* pchar = consume1 in
   if Unicode.(pchar.v = c) then return @@ Some pchar else return None
+
+let current_position =
+  let$ st = get () in
+  let pchar, _ = Preprocessor.next_pchar st.pps_state in
+  match pchar with None -> return ({ file = ""; line = 0; column = 1 } (*dummy*) : Token.position) | Some pchar' -> return pchar'.pos
 
 let punctuator =
   let open Unicode in
@@ -225,7 +229,7 @@ let identifier =
   | Some v -> return @@ Some { v with position = id.position }
 
 let number =
-  let$ position = gets (fun x -> Preprocessor.current_position x.pps_state) in
+  let$ position = current_position in
   let prefix =
     let prefix' =
       let$* pchars = consume 2 in
@@ -388,7 +392,7 @@ let escaped_sequence =
   in
   let hex =
     let to_int (d : Preprocessor.pchar) = Option.get @@ Unicode.hex_to_int d.v in
-    let$ pos = gets (fun x -> Preprocessor.current_position x.pps_state) in
+    let$ pos = current_position in
     let$* d1 = hex_digit in
     let rec hex' res =
       let$ d = ~?hex_digit in
@@ -420,7 +424,7 @@ let escaped_sequence =
 let encoding_prefix = string_of_any [| "u8"; "u"; "U"; "L" |]
 
 let character =
-  let$ position = gets (fun x -> Preprocessor.current_position x.pps_state) in
+  let$ position = current_position in
   let error_too_large_character_value () = Diag.lexical position "Constant value is not representable in the corresponding code unit" in
   let c_char =
     let regular_char =
@@ -467,7 +471,7 @@ let character =
       | _ -> assert false)
 
 let string_literal =
-  let$ position = gets (fun x -> Preprocessor.current_position x.pps_state) in
+  let$ position = current_position in
   let s_char =
     let regular_char =
       Option.map (fun (x : Preprocessor.pchar) -> x.v)
@@ -488,15 +492,45 @@ let string_literal =
       assert (Unicode.(pchar.v = '\n' || pchar.v = '\\'));
       Diag.lexical position "Newline or dissociative backslash character in string literal");
   let open Token in
-  return @@ Some { position; value = UnderdeterminateStringLiteral (encoding', Array.of_list s_char_seq) }
+  let zero_terminated_s_char_seq =
+    let seq = Array.of_list (Uchar.of_int 0 :: s_char_seq) in
+    let c = seq.(0) in
+    seq.(0) <- seq.(Array.length seq - 1);
+    seq.(Array.length seq - 1) <- c;
+    seq
+  in
+  return @@ Some { position; value = UnderdeterminateStringLiteral (encoding', zero_terminated_s_char_seq) }
+
+let pragma =
+  let rec split (str : Preprocessor.pchar list) =
+    let rec id (s : Preprocessor.pchar list) =
+      match s with
+      | [] -> ([], [])
+      | c :: s' when not @@ Unicode.is_space c.v ->
+          let v, s'' = id s' in
+          (c.v :: v, s'')
+      | _ :: s' -> ([], s')
+    in
+    match str with
+    | [] -> []
+    | pchar :: str' when Unicode.is_space pchar.v -> split str'
+    | _ :: _ ->
+        let v, str' = id str in
+        Array.of_list v :: split str'
+  in
+  let$* hash = take_if (fun x -> x.pos.column = 1 && Unicode.(x.v = '#')) in
+  let$* _ = string_of "pragma" in
+  let$* _ = take_if (fun x -> Unicode.is_space x.v) in
+  let$ payload = consume_while (fun x -> Unicode.(x.v <> '\n')) in
+  return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
 let error =
   let$* pchar = consume1 in
-  Diag.lexical pchar.pos (Printf.sprintf "Failed to parse token %d" @@ int_of_char (Unicode.uchar_to_u8_string pchar.v).[0])
+  Diag.lexical pchar.pos "Failed to parse token"
 
 let token' =
   let$ _ = consume_while (fun p -> Unicode.is_space p.v) in
-  number |- punctuator |- character |- string_literal |- identifier |- error
+  pragma |- number |- punctuator |- character |- string_literal |- identifier |- error
 
 let concat_string_literal (string_literals : Token.t list) =
   let open Token in
@@ -562,7 +596,7 @@ let token =
   let rec take_contiguous_string_literals () =
     let take_string_literal =
       ~?(let$ tk = token' in
-         return @@ match tk with Some { value = Token.StringLiteral _; _ } as s -> s | _ -> None)
+         return @@ match tk with Some { value = Token.UnderdeterminateStringLiteral _; _ } as s -> s | _ -> None)
     in
     let$ tk = take_string_literal in
     match tk with None -> return [] | Some v -> List.cons v <$> take_contiguous_string_literals ()
