@@ -39,8 +39,8 @@ def main(argv : list[str]):
     p = subprocess.run(gcc_preprocess_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if p.returncode != 0:
         print('\033[31mPreprocess Failed:\033[0m', file=sys.stderr)
-        print(p.stderr.decode().encode('utf-8'), file=sys.stderr)
-        print('\033[31mNote that warnings about undefinition of "__STDC_*" macros just can be ignored\033[0m', file=sys.stderr)
+        print(p.stderr.decode(), file=sys.stderr)
+        print('Note that warnings(from preprocessor of gcc) about undefining of "__STDC_*" macros just can be ignored', file=sys.stderr)
         return -1
     if len(argv) > 1 and argv[1] == 'preprocess':
         if len(argv) > 2 and argv[2] == 'bin':

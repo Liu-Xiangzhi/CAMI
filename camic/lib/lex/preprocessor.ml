@@ -47,12 +47,14 @@ let ucn ~is_short =
   let len = if is_short then 4 else 8 in
   let$ st = get () in
   advance len
-  >> return
-     @@
-     if has_n_char st len then
-       let* v = Unicode.int_of_string Unicode.Hexdecimal (Array.sub st.source st.current len) in
-       if Uchar.is_valid v then Some { v = Uchar.of_int v; pos = st.pos } else None
-     else None
+  >>
+  if has_n_char st len then
+    match Unicode.int_of_string Unicode.Hexdecimal (Array.sub st.source st.current len) with
+    | None -> Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
+    | Some v ->
+        if Uchar.is_valid v then return { v = Uchar.of_int v; pos = {st.pos with column = st.pos.column - 2} }
+        else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name value"
+  else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
 
 let extract_current_line st =
   let rec find_lf i =
@@ -93,13 +95,10 @@ let rec pchar () =
       | _ when uc = '#' && Stdlib.(st.pos.column = 1) -> (
           match next st 1 with Some c when c = ' ' -> advance 2 >> change_pos >> pchar () | _ -> just_current_char)
       | _ when uc = '\\' -> (
-          match next st 1 with Some n' when n' = 'u' || n' = 'U' -> parse_ucn ~is_short:(n' = 'u') | _ -> just_current_char)
+          match next st 1 with
+          | Some n' when n' = 'u' || n' = 'U' -> advance 2 >> (Option.some <$> ucn ~is_short:(n' = 'u'))
+          | _ -> just_current_char)
       | _ -> just_current_char)
-
-and parse_ucn ~is_short =
-  advance 2
-  >> let$ res = ucn ~is_short in
-     if Option.is_none res then advance (if is_short then 4 else 8) >> pchar () else return res
 
 let next_pchar st = run (pchar ()) st
 

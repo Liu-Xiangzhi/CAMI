@@ -239,7 +239,8 @@ let number =
         match pchars.(1).v with
         | c when c = 'b' || c = 'B' -> return @@ Some 2
         | c when c = 'x' || c = 'X' -> return @@ Some 16
-        | _ -> return @@ Some 8
+        | c when Unicode.is_octal_digit c -> return @@ Some 8
+        | _ -> return None
     in
     prefix' |- return @@ Some 10
   in
@@ -568,7 +569,7 @@ let concat_string_literal (string_literals : Token.t list) =
       Value.Array (to_u8_bytes ustr |> Bytes.to_seq |> Array.of_seq |> Array.map (fun c -> Value.Basic (BasicValue.UChar c)))
     in
     let to_u16_array ustr =
-      Value.Array (Unicode.to_u16_string ustr |> Array.map (fun c -> Value.Basic (BasicValue.of_uint16 (Int64.of_int @@ Uchar.to_int c))))
+      Value.Array (Unicode.to_u16_string ustr |> Array.map (fun c -> Value.Basic (BasicValue.of_uint16 (Int64.of_int c))))
     in
     let to_u32_array ustr =
       Value.Array (ustr |> Array.map (fun c -> Value.Basic (BasicValue.of_uint32 (Int64.of_int @@ Uchar.to_int c))))

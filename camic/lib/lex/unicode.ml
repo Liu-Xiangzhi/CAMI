@@ -75,16 +75,16 @@ let to_u8_string ustr = String.of_bytes @@ to_u8_bytes ustr
 
 let to_u16_string ustr =
   let len = Array.length ustr + Array.fold_left (fun acc uc -> acc + if Uchar.to_int uc > 0x10000 then 1 else 0) 0 ustr in
-  let arr = Array.make len (Uchar.of_int 0) in
+  let arr = Array.make len (0) in
   let j = ref 0 in
   for i = 0 to Array.length ustr - 1 do
     let v = Uchar.to_int ustr.(i) in
     if v > 0x10000 then (
-      Array.set arr !j @@ Uchar.of_int (0xd800 + ((v - 0x10000) lsr 10));
-      Array.set arr (!j + 1) @@ Uchar.of_int (0xdc00 + ((v - 0x10000) land 0x3ff));
+      Array.set arr !j (0xd800 + ((v - 0x10000) lsr 10));
+      Array.set arr (!j + 1) (0xdc00 + ((v - 0x10000) land 0x3ff));
       j := !j + 2)
     else (
-      Array.set arr !j @@ ustr.(i);
+      Array.set arr !j @@ Uchar.to_int ustr.(i);
       j := !j + 1)
   done;
   arr
@@ -119,8 +119,8 @@ let is_hex_digit uc =
 let hex_to_int uc =
   match Uchar.to_int uc with
   | v when v >= int_of_char '0' && v <= int_of_char '9' -> Option.Some (v - int_of_char '0')
-  | v when v >= int_of_char 'a' && v <= int_of_char 'f' -> Option.Some (v - int_of_char 'a')
-  | v when v >= int_of_char 'A' && v <= int_of_char 'F' -> Option.Some (v - int_of_char 'A')
+  | v when v >= int_of_char 'a' && v <= int_of_char 'f' -> Option.Some (v - int_of_char 'a' + 10)
+  | v when v >= int_of_char 'A' && v <= int_of_char 'F' -> Option.Some (v - int_of_char 'A' + 10)
   | _ -> Option.None
 
 let bin_to_int uc =

@@ -134,22 +134,22 @@ type t =
 let of_int16 x =
   assert (!Config.short_size = 2);
   (* TODO: change here if customization of config is supported *)
-  assert (x > Int64.of_int (-0x8000) && x < Int64.of_int 0x7fff);
+  assert (x >= Int64.of_int (-0x8000) && x <= Int64.of_int 0x7fff);
   Short (Option.get @@ Short.of_int64 x)
 
 let of_uint16 x =
   assert (!Config.short_size = 2);
-  assert (x > Int64.of_int 0 && x < Int64.of_int 0xffff);
+  assert (x >= Int64.of_int 0 && x <= Int64.of_int 0xffff);
   UShort (Option.get @@ UShort.of_int64 x)
 
 let of_int32 x =
   assert (!Config.int_size = 4);
-  assert (x > Int64.of_int (-0x8000_0000) && x < Int64.of_int 0x7fff_ffff);
+  assert (x >= Int64.of_int (-0x8000_0000) && x <= Int64.of_int 0x7fff_ffff);
   Int (Option.get @@ Int.of_int64 x)
 
 let of_uint32 x =
   assert (!Config.int_size = 4);
-  assert (x > Int64.of_int 0 && x < Int64.of_int 0xffff_ffff);
+  assert (x >= Int64.of_int 0 && x <= Int64.of_int 0xffff_ffff);
   UInt (Option.get @@ UInt.of_int64 x)
 
 let of_int64 x =

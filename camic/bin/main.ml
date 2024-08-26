@@ -109,7 +109,7 @@ let () =
     with e -> (
       match e with
       | Diag.AbortCompilation reason ->
-          Printf.eprintf "\x1b[31mCompilation aborted due to %s\x1b[0m\n" reason;
+          Printf.eprintf "\x1b[31mCompilation aborted due to fatal error\n%s\x1b[0m\n" reason;
           -2
       | _ ->
           Printf.eprintf "\x1b[31mInternal compiler error\n";
