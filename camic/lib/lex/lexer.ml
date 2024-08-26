@@ -5,17 +5,19 @@ type basic_identifier = {
   v : Unicode.string;
 }
 
-module LexerState : State_monad.State with type t = state = struct
+module Lexer = Parsing.Make (struct
   type t = state
-end
+  type payload = Preprocessor.pchar
 
-module Lexer = State_monad.Make (LexerState)
-
-type 'a t = 'a Lexer.t
+  let run1 st =
+    let pchar, pps_state = Preprocessor.next_pchar st.pps_state in
+    (pchar, { pps_state })
+end)
 
 let create pps_state = { pps_state }
 
 open Lexer
+open Lexer.State
 
 let keywords_map =
   let position (*dummy*) : Token.position = { file = ""; line = 0; column = 0 } in
@@ -88,62 +90,15 @@ let pchar_array_to_u32string (pchars : Preprocessor.pchar array) =
   in
   repeat 0
 
-let ( let$ ) = ( >>= )
-
-let ( let$* ) m f =
-  let$ v = m in
-  if Option.is_none v then return None else f (Option.get v)
-
 let ( let@ ) x f = Option.map f x
 
-let ( |- ) a b =
-  let$ st = get () in
-  let$ v1 = a in
-  if Option.is_some v1 then return v1 else set st >> b
-
-let ( ~? ) a = a |- return None
-
-let consume1 =
-  let$ st = get () in
-  let pchar, pps_state = Preprocessor.next_pchar st.pps_state in
-  set { pps_state } >> return pchar
-
-let consume n =
-  let dummy_pchar : Preprocessor.pchar = { v = Uchar.of_int 0; pos = { file = ""; line = 0; column = 0 } } in
-  let arr = Array.make n dummy_pchar in
-  let rec repeat i =
-    if i >= n then return @@ Some arr
-    else
-      let$* v = consume1 in
-      Array.set arr i v;
-      repeat (i + 1)
-  in
-  repeat 0
-
-let rec many m =
-  let$ v = ~?m in
-  match v with None -> return [] | Some v' -> List.cons v' <$> many m
-
-let many1 m =
-  let$* v = m in
-  let$ vs = many m in
-  return @@ Some (v :: vs)
-
-let take_if pred =
-  let$* pchar = consume1 in
-  return @@ if pred pchar then Some pchar else None
-
-let rec consume_while pred =
-  let$ pchar = ~?(take_if pred) in
-  if Option.is_none pchar then return [] else List.cons (Option.get pchar) <$> consume_while pred
-
 let string_of str =
-  let$* arr = consume @@ String.length str in
+  let$* arr = take @@ String.length str in
   if Unicode.(arr |> pchar_array_to_u32string =? str) then return @@ Some arr else return None
 
 (** weakly case insensitive version of 'string_of'. 'weakly' means mixture of upper and lower case is not considered equivalent *)
 let string_of' str =
-  let$* arr = consume @@ String.length str in
+  let$* arr = take @@ String.length str in
   let u32str = arr |> pchar_array_to_u32string in
   if Unicode.(u32str =? String.lowercase_ascii str || u32str =? String.uppercase_ascii str) then return @@ Some arr else return None
 
@@ -152,7 +107,7 @@ let string_of_any arr =
   any_of arr 0
 
 let char_of c =
-  let$* pchar = consume1 in
+  let$* pchar = take1 in
   if Unicode.(pchar.v = c) then return @@ Some pchar else return None
 
 let current_position =
@@ -173,12 +128,12 @@ let punctuator =
   let left_shift_assgin = punctuator_n LShiftAssign "<<=" in
   let right_shift_assgin = punctuator_n RShiftAssign ">>=" in
   let regular_punctuator =
-    let$* pchar = consume1 in
+    let$* pchar = take1 in
     let position = pchar.pos in
     let punctuator1 p = return @@ Some { position; value = p } in
     let punctuator2 punc1 assoc_arr =
       let punctuator2' (arr : (char * Token.value) array) =
-        let$* pchar' = consume1 in
+        let$* pchar' = take1 in
         return
         @@ let@ value = Array.find_map (fun (c, v) -> if pchar'.v = c then Some v else None) arr in
            { position; value }
@@ -217,7 +172,7 @@ let punctuator =
 
 let basic_identifier : basic_identifier option t =
   let$* pchar = ~?(take_if (fun pchar -> Unicode.(is_xid_start pchar.v || pchar.v = '_'))) in
-  let$ xid_continues = consume_while (fun pchar -> Unicode.is_xid_continue pchar.v) in
+  let$ xid_continues = take_while (fun pchar -> Unicode.is_xid_continue pchar.v) in
   return @@ Some { position = pchar.pos; v = Array.of_list (pchar.v :: List.map (fun (x : Preprocessor.pchar) -> x.v) xid_continues) }
 
 let identifier =
@@ -232,7 +187,7 @@ let number =
   let$ position = current_position in
   let prefix =
     let prefix' =
-      let$* pchars = consume 2 in
+      let$* pchars = take 2 in
       let open Unicode in
       if pchars.(0).v <> '0' then return None
       else
@@ -408,7 +363,7 @@ let escaped_sequence =
     else return @@ Some (Uchar.of_int v)
   in
   let$* _ = char_of '\\' in
-  let$* pchar = consume1 in
+  let$* pchar = take1 in
   let open Unicode in
   match pchar.v with
   | c when c = '\'' || c = '"' || c = '?' || c = '\\' -> return @@ Some c
@@ -445,7 +400,7 @@ let character =
         Uchar.to_int c
     | _ -> assert false
   in
-  let$ delimiter = consume1 in
+  let$ delimiter = take1 in
   (match delimiter with
   | None -> Diag.lexical position "unclosed character constant"
   | Some pchar when Unicode.(pchar.v = '\'') -> ()
@@ -485,7 +440,7 @@ let string_literal =
   let encoding' = Option.value encoding ~default:[||] |> pchar_array_to_u32string in
   let$* _ = char_of '"' in
   let$* s_char_seq = s_char_sequence in
-  let$ delimiter = consume1 in
+  let$ delimiter = take1 in
   (match delimiter with
   | None -> Diag.lexical position "unclosed string literal"
   | Some pchar when Unicode.(pchar.v = '\"') -> ()
@@ -515,15 +470,15 @@ let pragma =
   let$* hash = take_if (fun x -> x.pos.column = 1 && Unicode.(x.v = '#')) in
   let$* _ = string_of "pragma" in
   let$* _ = take_if (fun x -> Unicode.is_space x.v) in
-  let$ payload = consume_while (fun x -> Unicode.(x.v <> '\n')) in
+  let$ payload = take_while (fun x -> Unicode.(x.v <> '\n')) in
   return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
 let error =
-  let$* pchar = consume1 in
+  let$* pchar = take1 in
   Diag.lexical pchar.pos "Failed to parse token"
 
 let token' =
-  let$ _ = consume_while (fun p -> Unicode.is_space p.v) in
+  let$ _ = take_while (fun p -> Unicode.is_space p.v) in
   pragma |- number |- punctuator |- character |- string_literal |- identifier |- error
 
 let concat_string_literal (string_literals : Token.t list) =

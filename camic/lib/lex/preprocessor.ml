@@ -5,13 +5,9 @@ type state = {
   physical_line : int;
 }
 
-module PreprocessorState : State_monad.State with type t = state = struct
+module Preprocessor = Monad.MakeState (struct
   type t = state
-end
-
-module Preprocessor = State_monad.Make (PreprocessorState)
-
-type 'a t = 'a Preprocessor.t
+end)
 
 type pchar = {
   v : Uchar.t;
@@ -52,7 +48,7 @@ let ucn ~is_short =
     match Unicode.int_of_string Unicode.Hexdecimal (Array.sub st.source st.current len) with
     | None -> Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
     | Some v ->
-        if Uchar.is_valid v then return { v = Uchar.of_int v; pos = {st.pos with column = st.pos.column - 2} }
+        if Uchar.is_valid v then return { v = Uchar.of_int v; pos = { st.pos with column = st.pos.column - 2 } }
         else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name value"
   else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
 

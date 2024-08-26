@@ -1,5 +1,4 @@
 type state
-type 'a t
 
 type pchar = {
   v : Uchar.t;

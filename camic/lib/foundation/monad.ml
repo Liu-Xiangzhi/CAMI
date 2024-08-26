@@ -13,10 +13,6 @@ module type Monad = sig
 end
 
 module type State = sig
-  type t
-end
-
-module type StateMonad = sig
   include Monad
 
   type state_t
@@ -28,7 +24,9 @@ module type StateMonad = sig
   val run : 'a t -> state_t -> 'a * state_t
 end
 
-module Make (St : State) : StateMonad with type 'a t = St.t -> 'a * St.t and type state_t = St.t = struct
+module MakeState (St : sig
+  type t
+end) : State with type 'a t = St.t -> 'a * St.t and type state_t = St.t = struct
   type 'a t = St.t -> 'a * St.t
 
   let ( <$> ) f m st =
