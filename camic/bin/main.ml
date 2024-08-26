@@ -1,22 +1,45 @@
 open Camic
 
-let rec read_utf32_string_from_channel channel =
-  let get_byte () = try input_byte channel with End_of_file -> Diag.encoding "Invalid UTF32 encoding of source, trailing bytes exists"
+let rec read_utf8_string_from_channel channel =
+  let get_subsequent_byte () =
+    try
+      let v = input_byte channel in
+      if v land 0xc0 <> 0x80 then Diag.encoding "Invalid UTF8 encoding, bad subsequent byte";
+      v
+    with End_of_file -> Diag.encoding "Invalid UTF8 encoding, lack of subsequent byte"
   and input_byte_opt () = try Option.some @@ input_byte channel with End_of_file -> Option.None in
   match input_byte_opt () with
   | None -> []
   | Some b1 ->
-      let b2 = get_byte () in
-      let b3 = get_byte () in
-      let b4 = get_byte () in
-      let codepoint = (b4 lsl 24) lor (b3 lsl 16) lor (b2 lsl 8) lor b1 in
-      if not (Uchar.is_valid codepoint) then Diag.encoding "Invalid UTF32 encoding of source, invalid codepoint"
-      else Uchar.of_int codepoint :: read_utf32_string_from_channel channel
+      let codepoint =
+        match b1 with
+        | _ when b1 land 0x80 = 0 -> b1
+        | _ when b1 land 0xf0 = 0b1100_0000 ->
+            let b2 = get_subsequent_byte () in
+            let v = ((b1 land 0x1f) lsl 6) lor (b2 land 0x3f) in
+            if v < 0x80 then Diag.encoding "Invalid UTF8 encoding, bad value";
+            v
+        | _ when b1 land 0xf0 = 0b1110_0000 ->
+            let b2 = get_subsequent_byte () in
+            let b3 = get_subsequent_byte () in
+            let v = ((b1 land 0xf) lsl 12) lor ((b2 land 0x3f) lsl 6) lor (b3 land 0x3f) in
+            if v < 0x800 || (v >= 0xd800 && v <= 0xdf00) then Diag.encoding "Invalid UTF8 encoding, bad value";
+            v
+        | _ when b1 land 0xf8 = 0b1111_0000 ->
+            let b2 = get_subsequent_byte () in
+            let b3 = get_subsequent_byte () in
+            let b4 = get_subsequent_byte () in
+            let v = ((b1 land 0x7) lsl 18) lor ((b2 land 0x3f) lsl 12) lor ((b3 land 0x3f) lsl 6) lor (b4 land 0x3f) in
+            if v < 0x1_0000 || v > 0x10_ffff then Diag.encoding "Invalid UTF8 encoding, bad value";
+            v
+        | _ -> Diag.encoding "Invalid UTF8 encoding, bad leading byte"
+      in
+      Uchar.of_int codepoint :: read_utf8_string_from_channel channel
 
-let read_utf32_string channel_name =
+let read_utf8_string channel_name =
   let channel = if channel_name <> "" then open_in_bin channel_name else stdin in
   try
-    let res = read_utf32_string_from_channel channel in
+    let res = read_utf8_string_from_channel channel in
     if channel_name <> "" then close_in channel else ();
     Array.of_list res
   with e ->
@@ -52,11 +75,7 @@ let is_show_preprocess_result = ref false
 let is_show_tokenize_result = ref false
 
 let parse_command_line () =
-  let usage_msg =
-    "ocamlc [Option]... [<input_file>]\n\
-     Options are listed below\n\
-     See document or 'man camic' for more informantion"
-  in
+  let usage_msg = "ocamlc [Option]... [<input_file>]\nOptions are listed below\nSee document or 'man camic' for more informantion" in
   let anon_fun filename = Config.source_name := filename in
   let speclist =
     [
@@ -76,7 +95,7 @@ let parse_command_line () =
 let main () =
   parse_command_line ();
   if Config.check_validity () then (
-    let pps_st = Preprocessor.create @@ read_utf32_string !Config.source_name in
+    let pps_st = Preprocessor.create @@ read_utf8_string !Config.source_name in
     let lexer_st = Lexer.create pps_st in
     if !is_show_preprocess_result then show_preprocess_result pps_st else ();
     if !is_show_tokenize_result then show_tokenize_result lexer_st else ();

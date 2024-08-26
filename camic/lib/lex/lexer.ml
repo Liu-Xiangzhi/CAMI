@@ -481,7 +481,7 @@ let string_literal =
   in
   let s_char_sequence = many1 s_char in
   let$ encoding = ~?encoding_prefix in
-  let encoding' = if Option.is_none encoding then [||] else Option.get encoding |> pchar_array_to_u32string in
+  let encoding' = Option.value encoding ~default:[||] |> pchar_array_to_u32string in
   let$* _ = char_of '"' in
   let$* s_char_seq = s_char_sequence in
   let$ delimiter = consume1 in
@@ -492,14 +492,7 @@ let string_literal =
       assert (Unicode.(pchar.v = '\n' || pchar.v = '\\'));
       Diag.lexical position "Newline or dissociative backslash character in string literal");
   let open Token in
-  let zero_terminated_s_char_seq =
-    let seq = Array.of_list (Uchar.of_int 0 :: s_char_seq) in
-    let c = seq.(0) in
-    seq.(0) <- seq.(Array.length seq - 1);
-    seq.(Array.length seq - 1) <- c;
-    seq
-  in
-  return @@ Some { position; value = UnderdeterminateStringLiteral (encoding', zero_terminated_s_char_seq) }
+  return @@ Some { position; value = UnderdeterminateStringLiteral (encoding', Array.of_list s_char_seq) }
 
 let pragma =
   let rec split (str : Preprocessor.pchar list) =
@@ -545,7 +538,7 @@ let concat_string_literal (string_literals : Token.t list) =
     | [] -> Some prefix
     | s :: ss ->
         let pf, _ = extract_underdeterminate_string s in
-        if Unicode.(prefix =! "" && prefix ==! pf) then None else get_prefix ss pf
+        if Unicode.(prefix =? "") then get_prefix ss pf else if Unicode.(pf =? "" || prefix === pf) then get_prefix ss prefix else None
   in
   let rec get_values sls =
     match sls with
@@ -555,7 +548,7 @@ let concat_string_literal (string_literals : Token.t list) =
         v :: get_values ss
   in
   let concat_values vs =
-    let total_len = List.fold_left (fun acc x -> acc + Array.length x) 0 vs in
+    let total_len = List.fold_left (fun acc x -> acc + Array.length x) 1 (*terminating zero*) vs in
     let result = Array.make total_len (Uchar.of_int 0) in
     let i = ref 0 in
     List.iter
@@ -563,6 +556,7 @@ let concat_string_literal (string_literals : Token.t list) =
         Array.blit x 0 result !i (Array.length x);
         i := !i + Array.length x)
       vs;
+    result.(Array.length result - 1) <- Uchar.of_int 0;
     result
   in
   let transform prefix str =

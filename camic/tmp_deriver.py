@@ -32,20 +32,20 @@ gcc_preprocess_cmd = ['gcc',
                       '-U__STDC_NO_THREADS__', '-D__STDC_NO_THREADS__=1',
                       '-U__STDC_NO_VLA__', '-D__STDC_NO_VLA__=1',
                       '-E',
-                      '/home/liuxiangzhi/projects/cami/compiler/test/testcases/a.c']
+                      '/home/liuxiangzhi/projects/cami/camic/test/testcases/a.c']
 
 def main(argv : list[str]):
     import subprocess, os, sys
     p = subprocess.run(gcc_preprocess_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if p.returncode != 0:
         print('\033[31mPreprocess Failed:\033[0m', file=sys.stderr)
-        print(p.stderr.decode(), file=sys.stderr)
+        print(p.stderr.decode().encode('utf-8'), file=sys.stderr)
         print('\033[31mNote that warnings about undefinition of "__STDC_*" macros just can be ignored\033[0m', file=sys.stderr)
         return -1
     if len(argv) > 1 and argv[1] == 'preprocess':
         if len(argv) > 2 and argv[2] == 'bin':
-            with open('/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin', 'wb') as f:
-                f.write(p.stdout.decode().encode('utf-32-le'))
+            with open('/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin', 'wb') as f:
+                f.write(p.stdout.decode().encode('utf-8'))
         else:
             print(p.stdout.decode(), end="")
         return 0
@@ -53,11 +53,11 @@ def main(argv : list[str]):
     ocamlrunparam = env.get("OCAMLRUNPARAM", "")
     env["OCAMLRUNPARAM"] =  "b" if ocamlrunparam == "" else "b," + ocamlrunparam
     if len(argv) > 1 and argv[1] == 'debug':
-        with open('/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin', 'wb') as f:
-            f.write(p.stdout.decode().encode('utf-32-le'))
-        subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/compiler/_build/default/lib', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/compiler/_build/default/bin/a.bin'], env=env)
+        with open('/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin', 'wb') as f:
+            f.write(p.stdout.decode().encode('utf-8'))
+        subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/camic/_build/default/lib', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin'], env=env)
     else:
-        p = subprocess.run(['/home/liuxiangzhi/projects/cami/compiler/_build/install/default/bin/camic'], input=p.stdout.decode().encode('utf-32-le'), env=env)
+        p = subprocess.run(['/home/liuxiangzhi/projects/cami/camic/_build/install/default/bin/camic'], input=p.stdout.decode().encode('utf-8'), env=env)
         return p.returncode
     return 0
         
