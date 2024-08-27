@@ -73,21 +73,25 @@ let to_bytes ustr char_len ~little_endian =
 let to_string ustr char_len ~little_endian = String.of_bytes @@ to_bytes ustr char_len ~little_endian *)
 let to_u8_string ustr = String.of_bytes @@ to_u8_bytes ustr
 
-let to_u16_string ustr =
-  let len = Array.length ustr + Array.fold_left (fun acc uc -> acc + if Uchar.to_int uc > 0x10000 then 1 else 0) 0 ustr in
-  let arr = Array.make len (0) in
-  let j = ref 0 in
-  for i = 0 to Array.length ustr - 1 do
-    let v = Uchar.to_int ustr.(i) in
-    if v > 0x10000 then (
-      Array.set arr !j (0xd800 + ((v - 0x10000) lsr 10));
-      Array.set arr (!j + 1) (0xdc00 + ((v - 0x10000) land 0x3ff));
-      j := !j + 2)
-    else (
-      Array.set arr !j @@ Uchar.to_int ustr.(i);
-      j := !j + 1)
-  done;
-  arr
+let uchar_to_u16 uc =
+  let v = Uchar.to_int uc in
+  if Uchar.to_int uc > 0x10000 then (0xd800 + ((v - 0x10000) lsr 10)) :: [ 0xdc00 + ((v - 0x10000) land 0x3ff) ] else [ v ]
+
+(* let to_u16_string ustr =
+   let len = Array.length ustr + Array.fold_left (fun acc uc -> acc + if Uchar.to_int uc > 0x10000 then 1 else 0) 0 ustr in
+   let arr = Array.make len (0) in
+   let j = ref 0 in
+   for i = 0 to Array.length ustr - 1 do
+     let v = Uchar.to_int ustr.(i) in
+     if v > 0x10000 then (
+       Array.set arr !j (0xd800 + ((v - 0x10000) lsr 10));
+       Array.set arr (!j + 1) (0xdc00 + ((v - 0x10000) land 0x3ff));
+       j := !j + 2)
+     else (
+       Array.set arr !j @@ Uchar.to_int ustr.(i);
+       j := !j + 1)
+   done;
+   arr *)
 
 let is_space uc =
   let v = Uchar.to_int uc in
@@ -148,28 +152,31 @@ type radix =
     Numbers with no prefix with be treated as decimal mode.
     If radix is specified not as `Auto`, correct prefix is also allowed.
 *)
-let int_of_string radix ustr =
-  let open Option in
-  let rec parse_digits i res ~char_to_int ~base =
-    if i >= Array.length ustr then Some res
-    else match char_to_int ustr.(i) with None -> None | Some v -> parse_digits (i + 1) ((res * base) + v) ~char_to_int ~base
-  in
-  let detect_radix rd = if rd <> Auto then rd else rd in
-  let get_prefix_end_idx prefix =
+let z_of_string radix ustr =
+  let remove_prefix prefix us =
     if
       Array.length ustr < 2
       || Uchar.to_int ustr.(0) <> int_of_char '0'
       || Uchar.to_int ustr.(1) <> int_of_char prefix
       || Uchar.to_int ustr.(1) <> int_of_char (Char.uppercase_ascii prefix)
-    then 0
-    else 2
+    then us
+    else Array.sub us 2 (Array.length us - 2)
   in
-  match detect_radix radix with
-  | Binary -> parse_digits (get_prefix_end_idx 'b') 0 ~char_to_int:bin_to_int ~base:2
-  | Octal -> parse_digits (get_prefix_end_idx 'o') 0 ~char_to_int:oct_to_int ~base:8
-  | Decimal -> parse_digits 0 0 ~char_to_int:dec_to_int ~base:10
-  | Hexdecimal -> parse_digits (get_prefix_end_idx 'x') 0 ~char_to_int:hex_to_int ~base:16
-  | _ -> assert false
+  let to_string us = us |> Array.map Uchar.to_char |> Array.to_seq |> String.of_seq in
+  try
+    Option.some
+    @@
+    match radix with
+    | Auto -> Z.of_string @@ to_string ustr
+    | Binary -> Z.of_string_base 2 @@ to_string @@ remove_prefix 'b' ustr
+    | Octal -> Z.of_string_base 8 @@ to_string @@ remove_prefix 'o' ustr
+    | Decimal -> Z.of_string_base 10 @@ to_string ustr
+    | Hexdecimal -> Z.of_string_base 16 @@ to_string @@ remove_prefix 'x' ustr
+  with Invalid_argument _ -> None
+
+let int_of_string radix ustr =
+  let v = z_of_string radix ustr in
+  if Option.is_some v && (Z.fits_int @@ Option.get v) then Some (Z.to_int @@ Option.get v) else None
 
 (** uchar compare with char *)
 let ( = ) uc c = uc = Uchar.of_char c

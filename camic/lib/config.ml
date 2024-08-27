@@ -5,6 +5,8 @@ let int_size = ref 4
 let long_size = ref 8
 let long_long_size = ref 8
 
+let char_as_schar = ref true
+
 let check_validity () =
   let res = ref true in
   let report_if_not v err =

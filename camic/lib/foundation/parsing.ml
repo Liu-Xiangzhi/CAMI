@@ -25,10 +25,14 @@ struct
 
   let ( ~? ) a = a |- return None
 
+  let ( >>? ) ma mb =
+    let$* _ = ma in
+    mb
+
   let take1 =
     let$ st = get () in
-    let pchar, st' = T.run1 st in
-    set st' >> return pchar
+    let payload, st' = T.run1 st in
+    set st' >> return payload
 
   let take n =
     let rec repeat i s =
@@ -48,11 +52,22 @@ struct
     let$ vs = many m in
     return @@ Some (v :: vs)
 
+  let sequence_of m ~delimiter =
+    let m' = delimiter >>? m in
+    let$* v = m in
+    let$ vs = many m' in
+    return @@ Some (v :: vs)
+
+  let sequence_of' m ~delimiter =
+    let$* v = sequence_of m ~delimiter in
+    let$ _ = ~?delimiter in
+    return @@ Some v
+
   let take_if pred =
-    let$* pchar = take1 in
-    return @@ if pred pchar then Some pchar else None
+    let$* payload = take1 in
+    return @@ if pred payload then Some payload else None
 
   let rec take_while pred =
-    let$ pchar = ~?(take_if pred) in
-    if Option.is_none pchar then return [] else List.cons (Option.get pchar) <$> take_while pred
+    let$ payload = ~?(take_if pred) in
+    if Option.is_none payload then return [] else List.cons (Option.get payload) <$> take_while pred
 end

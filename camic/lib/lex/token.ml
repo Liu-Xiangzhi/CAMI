@@ -10,7 +10,6 @@ type value =
   | Floating of Value.t
   | Character of Value.t
   | StringLiteral of Value.t
-  | UnderdeterminateStringLiteral of Unicode.string * Unicode.string
   | Pragma of Unicode.string array
   (* keywords *)
   | Alignas
@@ -235,6 +234,5 @@ let show tk =
     | Comma -> "<Punctuator> ,"
     | Hash -> "<Punctuator> #"
     | HashHash -> "<Punctuator> ##"
-    | _ -> assert false
   in
   Printf.sprintf "Token %s at %s %d:%d" (show_value tk.value) tk.position.file tk.position.line tk.position.column
