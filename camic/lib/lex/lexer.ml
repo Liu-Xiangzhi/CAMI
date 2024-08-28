@@ -356,8 +356,8 @@ let character =
   let$ position = current_position in
   let c_char =
     let regular_char =
-      Option.map (fun (x : Preprocessor.pchar) -> Uchar.to_int x.v)
-      <$> take_if (fun pchar -> Unicode.(pchar.v <> '\'' && pchar.v <> '\\' && pchar.v <> '\n'))
+      (fun (x : Preprocessor.pchar) -> Uchar.to_int x.v)
+      <$$> take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n'))
     in
     escaped_sequence |- regular_char
   in
@@ -398,10 +398,10 @@ let string_literal =
   let$ position = current_position in
   let s_char =
     let regular_char =
-      Option.map (fun (x : Preprocessor.pchar) -> { escaped = false; v = Uchar.to_int x.v })
-      <$> take_if (fun pchar -> Unicode.(pchar.v <> '"' && pchar.v <> '\\' && pchar.v <> '\n'))
+      (fun (x : Preprocessor.pchar) -> { escaped = false; v = Uchar.to_int x.v })
+      <$$> take_if' (fun x -> Unicode.(x <> '"' && x <> '\\' && x <> '\n'))
     in
-    let escaped_sequence' = Option.map (fun v -> { escaped = true; v }) <$> escaped_sequence in
+    let escaped_sequence' = (fun v -> { escaped = true; v }) <$$> escaped_sequence in
     escaped_sequence' |- regular_char
   in
   let s_char_sequence = many1 s_char in
@@ -436,17 +436,15 @@ let pragma =
         Array.of_list v :: split str'
   in
   let$* hash = take_if (fun x -> x.pos.column = 1 && Unicode.(x.v = '#')) in
-  let$* _ = string_of "pragma" >>? take_if (fun x -> Unicode.is_space x.v) in
-  let$ payload = take_while (fun x -> Unicode.(x.v <> '\n')) in
+  let$* _ = string_of "pragma" >>? take_if' Unicode.is_space in
+  let$ payload = take_while' (fun x -> Unicode.(x <> '\n')) in
   return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
 let error =
   let$* pchar = take1 in
   Diag.lexical pchar.pos "Failed to parse token"
 
-(* _opt suffix means that this monad will not change state if it failed *)
-let spaces_opt = Option.some <$> take_while' Unicode.is_space
-let token' = spaces_opt >> (pragma |- number |- punctuator |- character |- identifier |- error)
+let token' = pragma |- number |- punctuator |- character |- identifier |- error
 
 let concat_string_literal (string_literals : s_char_sequence list) =
   let (({ position; _ } : s_char_sequence) :: _) = string_literals [@@ocaml.warning "-8"] in
@@ -500,9 +498,8 @@ let concat_string_literal (string_literals : s_char_sequence list) =
   | Some prefix -> string_literals |> List.map (fun s -> s.seq) |> concat_values |> transform prefix
 
 let token =
-  let concatenated_string_literal =
-    Option.map (fun x -> concat_string_literal x) <$> (spaces_opt >> sequence_of string_literal ~delimiter:spaces_opt)
-  in
-  concatenated_string_literal |- token'
+  let spaces = take_while' Unicode.is_space in
+  let concatenated_string_literal = concat_string_literal <$$> sequence_of string_literal ~delimiter:(Option.some <$> spaces) in
+  spaces >> (concatenated_string_literal |- token')
 
 let next_token st = run token st

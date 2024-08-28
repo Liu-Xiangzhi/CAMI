@@ -24,6 +24,7 @@ struct
     if Option.is_some v1 then return v1 else set st >> b
 
   let ( ~? ) a = a |- return None
+  let ( <$$> ) f b = Option.map f <$> b
 
   let ( >>? ) ma mb =
     let$* _ = ma in
