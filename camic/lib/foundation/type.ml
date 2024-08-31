@@ -1,3 +1,23 @@
+module Qualifier : sig
+  type t = private int
+
+  val const : t
+  val volatile : t
+  val restrict : t
+  val atomic : t
+  val combine : t -> t -> t
+  val contain : t -> t -> bool
+end = struct
+  type t = int
+
+  let const = 1
+  let volatile = 2
+  let restrict = 4
+  let atomic = 8
+  let combine a b = a lor b
+  let contain a b = a land b <> 0
+end
+
 type t =
   | Char
   | SChar
@@ -16,11 +36,14 @@ type t =
   | Bool
   | Void
   | Null (* nullptr_t *)
-  | Qualify of t
   | Pointer of t
-  | Array_ of {
+  | Qualify of {
+      qualifier : Qualifier.t;
+      qualified : t;
+    }
+  | Array of {
       len : int;
-      element_t : t;
+      element : t;
     }
   | Struct of {
       name : Unicode.string;
@@ -34,6 +57,9 @@ type t =
       ret : t;
       params : field array;
     }
+  | IncompleteArray of t
+  | IncompleteStruct of Unicode.string
+  | IncompleteUnion of Unicode.string
 
 and field = {
   name : Unicode.string;
@@ -53,11 +79,12 @@ let rec alignof tp =
   | Bool -> 1
   | Void -> raise @@ Invalid_argument "alignof(void)"
   | Null -> raise @@ Invalid_argument "alignof(nullptr_t)"
-  | Qualify t -> alignof t
+  | Qualify { qualified; _ } -> alignof qualified
   | Pointer _ -> 8
-  | Array_ { element_t; _ } -> alignof element_t
+  | Array { element; _ } -> alignof element
   | Struct { members; _ } | Union { members; _ } -> Array.map (fun x -> alignof x.tp) members |> Array.fold_left max 1
   | Function _ -> raise @@ Invalid_argument "alignof(function)"
+  | _ -> raise @@ Invalid_argument "alignof(incomplete type)"
 
 let rec sizeof tp =
   match tp with
@@ -72,10 +99,11 @@ let rec sizeof tp =
   | Bool -> 1
   | Void -> raise @@ Invalid_argument "sizeof(void)"
   | Null -> raise @@ Invalid_argument "sizeof(nullptr_t)"
-  | Qualify t -> sizeof t
+  | Qualify { qualified; _ } -> sizeof qualified
   | Pointer _ -> 16
-  | Array_ { len; element_t } -> len * sizeof element_t
+  | Array { len; element } -> assert (len > 0); len * sizeof element
   | Struct { members; _ } ->
       Array.fold_left (fun acc x -> Utils.round (alignof x.tp) acc + sizeof x.tp) 0 members |> Utils.round (alignof tp) |> max 1
   | Union { members; _ } -> Array.map (fun x -> sizeof x.tp) members |> Array.fold_left max 1
   | Function _ -> raise @@ Invalid_argument "sizeof(function)"
+  | _ -> raise @@ Invalid_argument "sizeof(incomplete type)"

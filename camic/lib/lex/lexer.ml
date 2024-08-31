@@ -356,8 +356,7 @@ let character =
   let$ position = current_position in
   let c_char =
     let regular_char =
-      (fun (x : Preprocessor.pchar) -> Uchar.to_int x.v)
-      <$$> take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n'))
+      (fun (x : Preprocessor.pchar) -> Uchar.to_int x.v) <$$> take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n'))
     in
     escaped_sequence |- regular_char
   in
@@ -491,7 +490,14 @@ let concat_string_literal (string_literals : s_char_sequence list) =
       | _ when prefix =? "L" (* wide considered as u32, except type *) -> to_wide false
       | _ -> assert false
     in
-    { position; value = StringLiteral (Value.Array (Array.of_list @@ List.fold_right (fun x acc -> transfomer x @ acc) s [])) }
+    let parse_encoding = function
+      | _ when prefix =? "" || prefix =? "u8" -> Utf8
+      | _ when prefix =? "u" -> Utf16
+      | _ when prefix =? "U" || prefix =? "L" -> Utf32
+      | _ -> assert false
+    in
+    let v = Value.Array (Array.of_list @@ List.fold_right (fun x acc -> transfomer x @ acc) s []) in
+    { position; value = StringLiteral (v, parse_encoding prefix) }
   in
   match get_prefix string_literals [||] with
   | None -> Diag.lexical position "inconsistant prefix in string sequence"

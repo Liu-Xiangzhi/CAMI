@@ -32,8 +32,8 @@ let rec typeof = function
   | Pointer { obj = { tp; _ }; _ } -> Type.Pointer tp
   | Pointer' { tp; _ } -> tp
   | Array arr ->
-      let len = Array.length arr and element_t = typeof @@ Array.get arr 0 in
-      Type.Array_ { len; element_t }
+      let len = Array.length arr and element = typeof @@ Array.get arr 0 in
+      Type.Array { len; element }
   | Struct { tp; _ } -> tp
   | Union { tp; _ } -> tp
 

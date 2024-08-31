@@ -4,12 +4,17 @@ type position = {
   column : int;
 }
 
+type encoding =
+  | Utf8
+  | Utf16
+  | Utf32
+
 type value =
   | Identifier of Unicode.string
   | Integer of Value.t
   | Floating of Value.t
   | Character of Value.t
-  | StringLiteral of Value.t
+  | StringLiteral of Value.t * encoding
   | Pragma of Unicode.string array
   (* keywords *)
   | Alignas
@@ -123,13 +128,14 @@ type t = {
 }
 
 let show tk =
-  let show_value v =
-    match v with
+  let show_encoding = function Utf8 -> "UTF-8" | Utf16 -> "UTF-16" | Utf32 -> "UTF-32" in
+  let show_value = function
     | Identifier ustr -> "<Identifier> " ^ Unicode.to_u8_string ustr
     | Integer i -> "<Integer> " ^ Value.show i
     | Floating f -> "<Float> " ^ Value.show f
     | Character c -> "<Character> " ^ Value.show c
-    | StringLiteral sl -> "<StringLiteral> " ^ Value.show sl
+    | StringLiteral (sl, encoding) ->
+        Printf.sprintf "<StringLiteral> [%s] of \"%s\" " (show_encoding encoding) (Value.show sl)
     | Pragma payloads -> "<Pragma> " ^ (Array.fold_right (fun x acc -> Unicode.to_u8_string x :: acc) payloads [] |> String.concat " ")
     | Alignas -> "<Keywords> alignas"
     | Enum -> "<Keywords> enum"
