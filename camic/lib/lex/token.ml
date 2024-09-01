@@ -135,7 +135,7 @@ let show tk =
     | Floating f -> "<Float> " ^ Value.show f
     | Character c -> "<Character> " ^ Value.show c
     | StringLiteral (sl, encoding) ->
-        Printf.sprintf "<StringLiteral> [%s] of \"%s\" " (show_encoding encoding) (Value.show sl)
+        Printf.sprintf "<StringLiteral> [%s] of %s" (show_encoding encoding) (Value.show sl)
     | Pragma payloads -> "<Pragma> " ^ (Array.fold_right (fun x acc -> Unicode.to_u8_string x :: acc) payloads [] |> String.concat " ")
     | Alignas -> "<Keywords> alignas"
     | Enum -> "<Keywords> enum"
