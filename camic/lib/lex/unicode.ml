@@ -1,14 +1,22 @@
 type string = Uchar.t array (* utf32 string *)
 
+let compare a b =
+  let len_a = Array.length a in
+  let len_b = Array.length b in
+  let len = min len_a len_b in
+  let rec comp i = if i >= len then len_a - len_b else if a.(i) <> b.(i) then Uchar.to_int a.(i) - Uchar.to_int b.(i) else comp (i + 1) in
+  comp 0
+
+module Set = Set.Make (struct
+  type t = Uchar.t array
+
+  let compare = compare
+end)
+
 module Map = Map.Make (struct
   type t = Uchar.t array
 
-  let compare a b =
-    let len_a = Array.length a in
-    let len_b = Array.length b in
-    let len = min len_a len_b in
-    let rec comp i = if i >= len then len_a - len_b else if a.(i) <> b.(i) then Uchar.to_int a.(i) - Uchar.to_int b.(i) else comp (i + 1) in
-    comp 0
+  let compare = compare
 end)
 
 let is_xid_start = Uucp.Id.is_xid_start

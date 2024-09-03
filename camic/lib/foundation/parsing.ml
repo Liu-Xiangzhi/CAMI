@@ -6,11 +6,9 @@ module Make (T : sig
 end) =
 struct
   module State = Monad.MakeState (T)
+  include State
 
   type 'a t = 'a option State.t
-  type state_t = T.t
-
-  open State
 
   let ( let$ ) = ( >>= )
 
@@ -18,17 +16,51 @@ struct
     let$ v = m in
     if Option.is_none v then return None else f (Option.get v)
 
+  (** parse either a or b *)
   let ( |- ) a b =
     let$ st = get () in
     let$ v1 = a in
     if Option.is_some v1 then return v1 else set st >> b
 
-  let ( ~? ) a = a |- return None
-  let ( <$$> ) f b = Option.map f <$> b
+  (** try to parse m, which means state will not be changed if parsing falied *)
+  let ( ~? ) m = m |- return None
 
-  let ( >>? ) ma mb =
+  (** same as `~?`, but handles throwable monad *)
+  let ( ?? ) m : 'a t = fun st -> try run m st with Diag.AbortCompilation _ -> (None, st)
+
+  let ( ~$ ) m = Option.some <$> m
+
+  let ( <$$> ) f m = Option.map f <$> m
+  let ( |$ ) m f = f <$> m
+  let ( |$$ ) m f = f <$$> m
+  let ( *>! ) = ( >> )
+
+  (** simalar to `*>!`, checks whether the first attempt of parsing failed *)
+  let ( *> ) ma mb =
     let$* _ = ma in
     mb
+
+  (** contrast to `*>!` *)
+  let ( *<! ) ma mb =
+    let$ v = ma in
+    let$ _ = mb in
+    return v
+
+  (** simalar to `*<!`, but checks whether the second attempt of parsing failed *)
+  let ( *< ) ma mb =
+    let$* v = ma in
+    let$* _ = mb in
+    return @@ Some v
+
+  let ( ++ ) ma mb =
+    let$* va = ma in
+    let$* vb = mb in
+    return @@ Some (va, vb)
+
+  let ( ++! ) ma mb =
+    let$* va = ma in
+    let$ vb = mb in
+    return @@ Some (va, vb)
 
   let take1 =
     let$ st = get () in
@@ -53,14 +85,24 @@ struct
     let$ vs = many m in
     return @@ Some (v :: vs)
 
-  let sequence_of m ~delimiter =
-    let m' = delimiter >>? m in
+  let sequence m ~delimiter =
+    let m' = delimiter *> m in
+    let$ v = m in
+    match v with None -> return [] | Some v' -> List.cons v' <$> many m'
+
+  let sequence' m ~delimiter =
+    let$ v = sequence m ~delimiter in
+    let$ _ = ~?delimiter in
+    return v
+
+  let sequence1 m ~delimiter =
+    let m' = delimiter *> m in
     let$* v = m in
     let$ vs = many m' in
     return @@ Some (v :: vs)
 
-  let sequence_of' m ~delimiter =
-    let$* v = sequence_of m ~delimiter in
+  let sequence1' m ~delimiter =
+    let$* v = sequence1 m ~delimiter in
     let$ _ = ~?delimiter in
     return @@ Some v
 

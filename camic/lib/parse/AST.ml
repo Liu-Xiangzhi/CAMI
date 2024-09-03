@@ -74,6 +74,12 @@ type storage = storage' located
 type type_qualifier = type_qualifier' located
 type function_specifier = function_specifier' located
 
+type string_literal = {
+  sl : Value.t;
+  encoding : Token.encoding;
+  pos : position;
+}
+
 type attributes = attribute list
 and attribute = attribute_token * Token.t list
 
@@ -84,12 +90,6 @@ and attribute_token =
 type 'a attributed = {
   attr : attributes;
   v : 'a;
-}
-
-type string_literal = {
-  sl : Value.t;
-  encoding : Token.encoding;
-  pos : position;
 }
 
 type t = external_declaration list
@@ -129,7 +129,7 @@ and expression =
       operand : expression;
     }
   | CompoundLiteral of {
-      tp : storage option * type_name;
+      tp : storage list * type_name;
       init : braced_initializer;
       pos : position;
     }
@@ -154,6 +154,7 @@ and postfix' =
 
 and declaration =
   | StaticAssert of static_assert
+  | Pragma of Unicode.string array located
   | Attributes of attributes
   | Declaration of {
       attr : attributes;

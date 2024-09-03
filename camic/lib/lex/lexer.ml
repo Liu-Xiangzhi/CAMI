@@ -26,7 +26,6 @@ end)
 let create pps_state = pps_state
 
 open Lexer
-open Lexer.State
 
 let keywords_map =
   let position (*dummy*) : Token.position = { file = ""; line = 0; column = 0 } in
@@ -88,6 +87,7 @@ let keywords_map =
     |> add (Unicode.of_ascii "_Imaginary") { position; value = Imaginary }
     |> add (Unicode.of_ascii "_Noreturn") { position; value = Noreturn })
 
+let some = Option.some
 let pchar_array_to_u32string = Array.map (fun (pchar : Preprocessor.pchar) -> pchar.v)
 let take_if' pred = take_if (fun pchar -> pred pchar.v)
 let take_while' pred = take_while (fun pchar -> pred pchar.v)
@@ -195,10 +195,10 @@ let number =
   in
   let digit_sequence_if f =
     let digit = take_if' f in
-    let digit_with_delimiter = digit |- (char_of '\'' >>? digit) in
+    let digit_with_delimiter = digit |- char_of '\'' *> digit in
     let$* d1 = digit in
     let$ ds = many digit_with_delimiter in
-    return @@ Some (d1 :: ds)
+    return @@ some @@ (d1 :: ds)
   in
   let digit_sequence = digit_sequence_if Unicode.is_digit in
   let hex_digit_sequence = digit_sequence_if Unicode.is_hex_digit in
@@ -225,13 +225,12 @@ let number =
     let$ ds1 = ~?sequence in
     match ds1 with
     | None ->
-        let$* dot = char_of '.' in
-        let$* ds2 = sequence in
+        let$* dot, ds2 = char_of '.' ++ sequence in
         return @@ Some (dot :: ds2)
     | Some ds1' ->
         let$* dot = char_of '.' in
         let$ ds2 = ~?sequence in
-        return @@ Some (ds1' @ [ dot ] @ Option.value ds2 ~default:[])
+        return @@ some @@ ds1' @ [ dot ] @ Option.value ds2 ~default:[]
   in
   let fraction = fractional_of digit_sequence in
   let hex_fraction = fractional_of hex_digit_sequence in
@@ -244,12 +243,12 @@ let number =
     let pattern1 =
       let$* frac = fraction in
       let$ exp = ~?(exponent 'e') in
-      return @@ Some (frac @ Option.value exp ~default:[])
+      return @@ some @@ frac @ Option.value exp ~default:[]
     in
     let pattern2 =
       let$* ds = digit_sequence in
       let$* exp = exponent 'e' in
-      return @@ Some (ds @ exp)
+      return @@ some @@ ds @ exp
     in
     let$* num_list = pattern1 |- pattern2 in
     return @@ Some (num_list |> Array.of_list |> pchar_array_to_u32string)
@@ -308,7 +307,7 @@ let number =
     let$* num_list = digit_sequence_if pred in
     let$ sfx = integer_suffix in
     let num = num_list |> Array.of_list |> pchar_array_to_u32string |> Unicode.to_u8_string |> Z.of_string_base radix in
-    return @@ Some (z_to_integer_token (radix = 10) num sfx)
+    return @@ some @@ z_to_integer_token (radix = 10) num sfx
   in
   let$* radix = prefix in
   if radix = 10 || radix = 16 then floating (radix = 16) |- integer radix else integer radix
@@ -321,12 +320,12 @@ let escaped_sequence =
     let$* d1 = oct_digit in
     let$ d2 = ~?oct_digit in
     match d2 with
-    | None -> return @@ Some (Uchar.to_int d1.v)
+    | None -> return @@ some @@ Uchar.to_int d1.v
     | Some d2' -> (
         let$ d3 = ~?oct_digit in
         match d3 with
-        | None -> return @@ Some ((to_int d1 * 8) + to_int d2')
-        | Some d3' -> return @@ Some ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
+        | None -> return @@ some @@ ((to_int d1 * 8) + to_int d2')
+        | Some d3' -> return @@ some @@ ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
   in
   let hex =
     let$ pos = current_position in
@@ -335,11 +334,10 @@ let escaped_sequence =
     | Some v when v < 0xffff_ffff -> return @@ Some v
     | _ -> Diag.lexical pos "too large hexdecimal escaped sequence(bigger than 0xffff'ffff)"
   in
-  let$* _ = char_of '\\' in
-  let$* pchar = take1 in
+  let$* pchar = char_of '\\' *> take1 in
   let open Unicode in
   match pchar.v with
-  | c when c = '\'' || c = '"' || c = '?' || c = '\\' -> return @@ Some (Uchar.to_int c)
+  | c when c = '\'' || c = '"' || c = '?' || c = '\\' -> return @@ some @@ Uchar.to_int c
   | c when c = 'a' -> return @@ Some 0x07
   | c when c = 'b' -> return @@ Some (int_of_char '\b')
   | c when c = 'f' -> return @@ Some 0x0c
@@ -356,7 +354,7 @@ let character =
   let$ position = current_position in
   let c_char =
     let regular_char =
-      (fun (x : Preprocessor.pchar) -> Uchar.to_int x.v) <$$> take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n'))
+      take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n')) |$$ fun (x : Preprocessor.pchar) -> Uchar.to_int x.v
     in
     escaped_sequence |- regular_char
   in
@@ -397,10 +395,10 @@ let string_literal =
   let$ position = current_position in
   let s_char =
     let regular_char =
-      (fun (x : Preprocessor.pchar) -> { escaped = false; v = Uchar.to_int x.v })
-      <$$> take_if' (fun x -> Unicode.(x <> '"' && x <> '\\' && x <> '\n'))
+      take_if' (fun x -> Unicode.(x <> '"' && x <> '\\' && x <> '\n')) |$$ fun (x : Preprocessor.pchar) ->
+      { escaped = false; v = Uchar.to_int x.v }
     in
-    let escaped_sequence' = (fun v -> { escaped = true; v }) <$$> escaped_sequence in
+    let escaped_sequence' = escaped_sequence |$$ fun v -> { escaped = true; v } in
     escaped_sequence' |- regular_char
   in
   let s_char_sequence = many1 s_char in
@@ -435,7 +433,7 @@ let pragma =
         Array.of_list v :: split str'
   in
   let$* hash = take_if (fun x -> x.pos.column = 1 && Unicode.(x.v = '#')) in
-  let$* _ = string_of "pragma" >>? take_if' Unicode.is_space in
+  let$* _ = string_of "pragma" *> take_if' Unicode.is_space in
   let$ payload = take_while' (fun x -> Unicode.(x <> '\n')) in
   return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
@@ -505,7 +503,7 @@ let concat_string_literal (string_literals : s_char_sequence list) =
 
 let token =
   let spaces = take_while' Unicode.is_space in
-  let concatenated_string_literal = concat_string_literal <$$> sequence_of string_literal ~delimiter:(Option.some <$> spaces) in
+  let concatenated_string_literal = sequence1 string_literal ~delimiter:(Option.some <$> spaces) |$$ concat_string_literal in
   spaces >> (concatenated_string_literal |- token')
 
 let next_token st = run token st
