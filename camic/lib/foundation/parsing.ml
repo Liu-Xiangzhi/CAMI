@@ -29,24 +29,39 @@ struct
   let ( ?? ) m : 'a t = fun st -> try run m st with Diag.AbortCompilation _ -> (None, st)
 
   let ( ~$ ) m = Option.some <$> m
-
   let ( <$$> ) f m = Option.map f <$> m
   let ( |$ ) m f = f <$> m
   let ( |$$ ) m f = f <$$> m
-  let ( *>! ) = ( >> )
 
-  (** simalar to `*>!`, checks whether the first attempt of parsing failed *)
+  let ( *>! ) ma mb =
+    let$* _ = ma in
+    let$ v = mb in
+    return @@ Some v
+
+  let ( *!> ) ma mb =
+    let$ _ = ma in
+    let$* v = mb in
+    return @@ Some v
+
   let ( *> ) ma mb =
     let$* _ = ma in
     mb
 
-  (** contrast to `*>!` *)
   let ( *<! ) ma mb =
+    let$* v = ma in
+    let$ _ = mb in
+    return @@ Some v
+
+  let ( *!< ) ma mb =
+    let$ v = ma in
+    let$* _ = mb in
+    return @@ Some v
+
+  let ( << ) ma mb =
     let$ v = ma in
     let$ _ = mb in
     return v
 
-  (** simalar to `*<!`, but checks whether the second attempt of parsing failed *)
   let ( *< ) ma mb =
     let$* v = ma in
     let$* _ = mb in
@@ -61,6 +76,16 @@ struct
     let$* va = ma in
     let$ vb = mb in
     return @@ Some (va, vb)
+
+  let ( +!+ ) ma mb =
+    let$ va = ma in
+    let$* vb = mb in
+    return @@ Some (va, vb)
+
+  let ( +!+! ) ma mb =
+    let$ va = ma in
+    let$ vb = mb in
+    return (va, vb)
 
   let take1 =
     let$ st = get () in
@@ -105,6 +130,10 @@ struct
     let$* v = sequence1 m ~delimiter in
     let$ _ = ~?delimiter in
     return @@ Some v
+
+  let rec concat m =
+    let$ v = ~?m in
+    match v with None -> return @@ Some [] | Some v' -> List.append v' <$$> concat m
 
   let take_if pred =
     let$* payload = take1 in

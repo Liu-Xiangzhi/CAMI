@@ -196,9 +196,7 @@ let number =
   let digit_sequence_if f =
     let digit = take_if' f in
     let digit_with_delimiter = digit |- char_of '\'' *> digit in
-    let$* d1 = digit in
-    let$ ds = many digit_with_delimiter in
-    return @@ some @@ (d1 :: ds)
+    digit ++! many digit_with_delimiter |$$ Utils.uncurry List.cons
   in
   let digit_sequence = digit_sequence_if Unicode.is_digit in
   let hex_digit_sequence = digit_sequence_if Unicode.is_hex_digit in
@@ -224,9 +222,7 @@ let number =
   let fractional_of sequence =
     let$ ds1 = ~?sequence in
     match ds1 with
-    | None ->
-        let$* dot, ds2 = char_of '.' ++ sequence in
-        return @@ Some (dot :: ds2)
+    | None -> char_of '.' ++ sequence |$$ Utils.uncurry List.cons
     | Some ds1' ->
         let$* dot = char_of '.' in
         let$ ds2 = ~?sequence in
@@ -235,23 +231,13 @@ let number =
   let fraction = fractional_of digit_sequence in
   let hex_fraction = fractional_of hex_digit_sequence in
   let hex_float =
-    let$* frac_or_ds = hex_fraction |- hex_digit_sequence in
-    let$* exp = exponent 'p' in
-    return @@ Some (frac_or_ds @ exp |> Array.of_list |> pchar_array_to_u32string)
+    (hex_fraction |- hex_digit_sequence) ++ exponent 'p' |$$ fun (frac_or_ds, exp) ->
+    frac_or_ds @ exp |> Array.of_list |> pchar_array_to_u32string
   in
   let dec_float =
-    let pattern1 =
-      let$* frac = fraction in
-      let$ exp = ~?(exponent 'e') in
-      return @@ some @@ frac @ Option.value exp ~default:[]
-    in
-    let pattern2 =
-      let$* ds = digit_sequence in
-      let$* exp = exponent 'e' in
-      return @@ some @@ ds @ exp
-    in
-    let$* num_list = pattern1 |- pattern2 in
-    return @@ Some (num_list |> Array.of_list |> pchar_array_to_u32string)
+    let pattern1 = fraction ++! (~?(exponent 'e') |$ Option.value ~default:[]) |$$ Utils.uncurry ( @ ) in
+    let pattern2 = digit_sequence ++ exponent 'e' |$$ Utils.uncurry ( @ ) in
+    pattern1 |- pattern2 |$$ fun num_list -> num_list |> Array.of_list |> pchar_array_to_u32string
   in
   let ( =@ ) ustr str = Unicode.(ustr =? str || ustr =? String.uppercase_ascii str) in
   let floating is_hex =
@@ -324,8 +310,8 @@ let escaped_sequence =
     | Some d2' -> (
         let$ d3 = ~?oct_digit in
         match d3 with
-        | None -> return @@ some @@ ((to_int d1 * 8) + to_int d2')
-        | Some d3' -> return @@ some @@ ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
+        | None -> return @@ Some ((to_int d1 * 8) + to_int d2')
+        | Some d3' -> return @@ Some ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
   in
   let hex =
     let$ pos = current_position in
@@ -433,14 +419,10 @@ let pragma =
         Array.of_list v :: split str'
   in
   let$* hash = take_if (fun x -> x.pos.column = 1 && Unicode.(x.v = '#')) in
-  let$* _ = string_of "pragma" *> take_if' Unicode.is_space in
-  let$ payload = take_while' (fun x -> Unicode.(x <> '\n')) in
+  let$* payload = string_of "pragma" *> take_if' Unicode.is_space *>! take_while' (fun x -> Unicode.(x <> '\n')) in
   return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
-let error =
-  let$* pchar = take1 in
-  Diag.lexical pchar.pos "Failed to parse token"
-
+let error = take1 |$$ fun pchar -> Diag.lexical pchar.pos "Failed to parse token"
 let token' = pragma |- number |- punctuator |- character |- identifier |- error
 
 let concat_string_literal (string_literals : s_char_sequence list) =
@@ -504,6 +486,6 @@ let concat_string_literal (string_literals : s_char_sequence list) =
 let token =
   let spaces = take_while' Unicode.is_space in
   let concatenated_string_literal = sequence1 string_literal ~delimiter:(Option.some <$> spaces) |$$ concat_string_literal in
-  spaces >> (concatenated_string_literal |- token')
+  spaces *!> (concatenated_string_literal |- token')
 
 let next_token st = run token st

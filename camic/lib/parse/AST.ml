@@ -11,14 +11,14 @@ type binary_operator' =
   | Less
   | Great
   | LessEqual
-  | GreatEqaul
+  | GreatEqual
   | Equal
   | NotEqual
+  | BitwiseAnd
+  | BitwiseOr
+  | Xor
   | And
   | Or
-  | Xor
-  | LAnd
-  | LOr
   | Assign
   | MulAssign
   | DivAssign
@@ -178,7 +178,7 @@ and declaration_specifier =
 and type_specifier_qualifier =
   | Specifier of type_specifier
   | Qualifier of type_qualifier
-  | Alignment of type_or_expression
+  | Alignment of type_or_expression located
 
 and type_specifier = type_specifier' located
 
@@ -368,10 +368,11 @@ and statement = {
 
 and label =
   | Identifier of identifier attributed
-  | Case of expression attributed
-  | Default of attributes
+  | Case of expression located attributed
+  | Default of attributes located
 
-and unlabeled_statement =
+and unlabeled_statement = unlabeled_statement' located
+and unlabeled_statement' =
   | Null
   | Expression of expression attributed
   | Compound of compound_statement
@@ -409,7 +410,7 @@ and unlabeled_statement =
   | Break
   | Return of expression option
 
-and compound_statement = block_item list
+and compound_statement = block_item list located
 
 and block_item =
   | Declaration of declaration

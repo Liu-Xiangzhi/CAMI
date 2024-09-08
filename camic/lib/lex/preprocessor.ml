@@ -1,3 +1,5 @@
+(* Note that this preprocessor is not preprocessor of C, it's just a part of lexer *)
+
 type state = {
   source : Unicode.string;
   current : int;
@@ -99,5 +101,6 @@ let rec pchar () =
 let next_pchar st = run (pchar ()) st
 
 let show pchar =
-  Printf.sprintf "%s 0x%x in %s %d:%d" (Unicode.uchar_to_u8_string pchar.v) (Uchar.to_int pchar.v) pchar.pos.file pchar.pos.line
-    pchar.pos.column
+  let { green; yellow; cyan; clear; _ } : Utils.Color.t = Utils.Color.get () in
+  Printf.sprintf "%s%s %s0x%x %sat %s%s:%d:%d%s" green (Unicode.uchar_to_u8_string pchar.v) cyan (Uchar.to_int pchar.v) clear yellow
+    pchar.pos.file pchar.pos.line pchar.pos.column clear

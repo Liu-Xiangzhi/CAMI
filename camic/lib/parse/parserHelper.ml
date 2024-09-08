@@ -20,3 +20,9 @@ let current_position =
 let diag msg =
   let$ pos = current_position in
   Diag.parsing pos msg
+
+let unary_op op v = position_of op |$$ fun pos : AST.unary_operator -> { v; pos }
+let binary_op op v = position_of op |$$ fun pos : AST.binary_operator -> { v; pos }
+
+let binary_expression op expr =
+  expr ++! many (op ++ expr) |$$ Utils.uncurry @@ List.fold_left @@ fun acc (op, e) -> AST.Binary { op; lhs = acc; rhs = e }
