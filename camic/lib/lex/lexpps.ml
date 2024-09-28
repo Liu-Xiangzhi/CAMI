@@ -7,7 +7,7 @@ type state = {
   physical_line : int;
 }
 
-module Preprocessor = Monad.MakeState (struct
+module Lexpps = Monad.MakeState (struct
   type t = state
 end)
 
@@ -16,9 +16,9 @@ type pchar = {
   pos : Token.position;
 }
 
-open Preprocessor
+open Lexpps
 
-let create ustr = { source = ustr; current = 0; pos = { file = ""; line = 0; column = 1 } (*dummy*); physical_line = 1 }
+let create ustr = { source = ustr; current = 0; pos = { file = "<unknown>"; line = 0; column = 1 } (*dummy*); physical_line = 1 }
 let ( let* ) = Option.bind
 let ( let$ ) = ( >>= )
 let has_n_char st n = st.current + n < Array.length st.source
@@ -48,11 +48,11 @@ let ucn ~is_short =
   >>
   if has_n_char st len then
     match Unicode.int_of_string Unicode.Hexdecimal (Array.sub st.source st.current len) with
-    | None -> Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
+    | None -> Diag.lex_pps st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
     | Some v ->
         if Uchar.is_valid v then return { v = Uchar.of_int v; pos = { st.pos with column = st.pos.column - 2 } }
-        else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name value"
-  else Diag.preprocess st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
+        else Diag.lex_pps st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name value"
+  else Diag.lex_pps st.pos.line ~file:st.pos.file ~column:st.pos.column "Invalid universial character name syntax"
 
 let extract_current_line st =
   let rec find_lf i =
@@ -80,7 +80,7 @@ let change_pos =
   let$ st = get () in
   let line = extract_current_line st in
   match parse_line_controll_directive line with
-  | None -> Diag.preprocess st.physical_line "invalid line control directive at line"
+  | None -> Diag.lex_pps st.physical_line "invalid line control directive at line"
   | Some pos -> set { st with current = st.current + Array.length line + 1 (* the newline *); pos; physical_line = st.physical_line + 1 }
 
 let rec pchar () =

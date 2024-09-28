@@ -76,7 +76,7 @@ type function_specifier = function_specifier' located
 
 type string_literal = {
   sl : Value.t;
-  encoding : Token.encoding;
+  encoding : string;
   pos : position;
 }
 
@@ -341,10 +341,11 @@ and initializer_ =
   | Expression of expression
   | Braced of braced_initializer
 
-and braced_initializer = (designation option * initializer_) list
+and braced_initializer = (designation option * initializer_) list located
 and designation = designator list
+and designator = designator' located
 
-and designator =
+and designator' =
   | Subscript of expression
   | Member of identifier
 
@@ -355,7 +356,7 @@ and type_name = {
 
 and type_or_default =
   | Type of type_name
-  | Default
+  | Default of position
 
 and type_or_expression =
   | Type of type_name
@@ -371,10 +372,11 @@ and label =
   | Case of expression located attributed
   | Default of attributes located
 
-and unlabeled_statement = unlabeled_statement' located
+and unlabeled_statement = unlabeled_statement' attributed located
+
 and unlabeled_statement' =
   | Null
-  | Expression of expression attributed
+  | Expression of expression
   | Compound of compound_statement
   | If of {
       cond : expression;

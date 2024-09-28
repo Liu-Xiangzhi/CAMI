@@ -1,5 +1,6 @@
 (executable
  (public_name camic)
  (name main)
+ (modules main cli)
  (modes byte exe)
  (libraries camic))

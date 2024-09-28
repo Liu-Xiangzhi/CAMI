@@ -5,7 +5,11 @@ let int_size = ref 4
 let long_size = ref 8
 let long_long_size = ref 8
 let char_as_schar = ref true
+let wchar_size = ref 4
 let colored_print = ref true
+let source_charset = ref "UTF-8"
+let execution_charset = ref "UTF-8"
+let execution_wide_charset = ref (if Sys.big_endian then "UTF-32BE" else "UTF-32LE")
 
 let check_validity () =
   let res = ref true in
@@ -23,8 +27,9 @@ let check_validity () =
   report_if_not (is_2_power !int_size) "size of int type is not 2's power";
   report_if_not (is_2_power !long_size) "size of long type is not 2's power";
   report_if_not (is_2_power !long_long_size) "size of long long type is not 2's power";
+  report_if_not (is_2_power !wchar_size) "size of wchar_t is not 2's power";
   (* remove this statement if customization of config is supported  *)
   report_if_not
-    (!free_standing = false && !short_size = 2 && !int_size = 4 && !long_size = 8 && !long_long_size = 8)
+    (!free_standing = false && !short_size = 2 && !int_size = 4 && !long_size = 8 && !long_long_size = 8 && !wchar_size = 4)
     "customization of config is not supported by CAMI yet";
   !res

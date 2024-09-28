@@ -33,4 +33,4 @@ int main()
 #pragma a b c
 constexpr int \u4f60 = 0;
 constexpr int b = 你; # ##
-a1 0x1'23'4ull 1.e-10f u'a' . "abc" u"\U00004f60" +=>>=+- / *<:%%bbc+d
+a1 0x1'23'4ull 1.e-10f L'你' . L"abc" "\U00004f60" +=>>=+- / *<:%%bbc+d

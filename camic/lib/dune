@@ -1,4 +1,7 @@
 (include_subdirs unqualified)
 (library
  (name camic)
+ (foreign_stubs
+    (language cxx)
+    (names encoding))
  (libraries zarith uucp))

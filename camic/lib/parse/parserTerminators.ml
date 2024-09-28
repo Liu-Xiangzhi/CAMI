@@ -12,7 +12,7 @@ let string_literal =
   (fun x ->
     let { position; value = StringLiteral (v, encoding) } = x [@@warning "-8"] in
     ({ sl = v; encoding; pos = position } : AST.string_literal))
-  <$$> take_if is_stringLiteral
+  <$$> take_if is_string_literal
 
 let constant =
   let constant' =
@@ -39,8 +39,8 @@ let kw_float = take_if is_float
 let kw_atomic = take_if is_atomic
 let kw_break = take_if is_break
 let kw_for = take_if is_for
-let kw_staticAssert = take_if is_staticAssert
-let kw_bitInt = take_if is_bitInt
+let kw_static_assert = take_if is_static_assert
+let kw_bit_int = take_if is_bit_int
 let kw_case = take_if is_case
 let kw_goto = take_if is_goto
 let kw_struct = take_if is_struct
@@ -51,7 +51,7 @@ let kw_switch = take_if is_switch
 let kw_decimal128 = take_if is_decimal128
 let kw_const = take_if is_const
 let kw_inline = take_if is_inline
-let kw_threadLocal = take_if is_threadLocal
+let kw_thread_local = take_if is_thread_local
 let kw_decimal32 = take_if is_decimal32
 let kw_constexpr = take_if is_constexpr
 let kw_int = take_if is_int
@@ -67,7 +67,7 @@ let kw_typeof = take_if is_typeof
 let kw_imaginary = take_if is_imaginary
 let kw_do = take_if is_do
 let kw_register = take_if is_register
-let kw_typeofUnqual = take_if is_typeofUnqual
+let kw_typeof_unqual = take_if is_typeof_unqual
 let kw_noreturn = take_if is_noreturn
 let kw_double = take_if is_double
 let kw_restrict = take_if is_restrict
@@ -124,7 +124,7 @@ let or_assign = take_if is_or_assign
 let comma = take_if is_comma
 let hash = take_if is_hash
 let hash_hash = take_if is_hash_hash
-let identifier' = identifier |- diag "expect identifier"
+(* let identifier' = identifier |- diag "expect identifier"
 let string_literal' = string_literal |- diag "expect string literal"
 let constant' = constant |- diag "expect constant(integer number/floating-point number/character)"
 let kw_alignas' = kw_alignas |- diag "expect keyword \"alignas\""
@@ -145,8 +145,8 @@ let kw_float' = kw_float |- diag "expect keyword \"float\""
 let kw_atomic' = kw_atomic |- diag "expect keyword \"atomic\""
 let kw_break' = kw_break |- diag "expect keyword \"break\""
 let kw_for' = kw_for |- diag "expect keyword \"for\""
-let kw_staticAssert' = kw_staticAssert |- diag "expect keyword \"static_assert\""
-let kw_bitInt' = kw_bitInt |- diag "expect keyword \"_BitInt\""
+let kw_static_assert' = kw_static_assert |- diag "expect keyword \"static_assert\""
+let kw_bit_int' = kw_bit_int |- diag "expect keyword \"_BitInt\""
 let kw_case' = kw_case |- diag "expect keyword \"case\""
 let kw_goto' = kw_goto |- diag "expect keyword \"goto\""
 let kw_struct' = kw_struct |- diag "expect keyword \"struct\""
@@ -157,7 +157,7 @@ let kw_switch' = kw_switch |- diag "expect keyword \"switch\""
 let kw_decimal128' = kw_decimal128 |- diag "expect keyword \"_Decimal128\""
 let kw_const' = kw_const |- diag "expect keyword \"const\""
 let kw_inline' = kw_inline |- diag "expect keyword \"inline\""
-let kw_threadLocal' = kw_threadLocal |- diag "expect keyword \"thread_local\""
+let kw_thread_local' = kw_thread_local |- diag "expect keyword \"thread_local\""
 let kw_decimal32' = kw_decimal32 |- diag "expect keyword \"_Decimal32\""
 let kw_constexpr' = kw_constexpr |- diag "expect keyword \"constexpr\""
 let kw_int' = kw_int |- diag "expect keyword \"int\""
@@ -173,7 +173,7 @@ let kw_typeof' = kw_typeof |- diag "expect keyword \"typeof\""
 let kw_imaginary' = kw_imaginary |- diag "expect keyword \"_Imaginary\""
 let kw_do' = kw_do |- diag "expect keyword \"do\""
 let kw_register' = kw_register |- diag "expect keyword \"register\""
-let kw_typeofUnqual' = kw_typeofUnqual |- diag "expect keyword \"typeof_unqual\""
+let kw_typeof_unqual' = kw_typeof_unqual |- diag "expect keyword \"typeof_unqual\""
 let kw_noreturn' = kw_noreturn |- diag "expect keyword \"_Noreturn\""
 let kw_double' = kw_double |- diag "expect keyword \"double\""
 let kw_restrict' = kw_restrict |- diag "expect keyword \"restrict\""
@@ -229,7 +229,7 @@ let xor_assign' = xor_assign |- diag "expect `^=`"
 let or_assign' = or_assign |- diag "expect `|=`"
 let comma' = comma |- diag "expect `,`"
 let hash' = hash |- diag "expect `#`"
-let hash_hash' = hash_hash |- diag "expect `##`"
+let hash_hash' = hash_hash |- diag "expect `##`" *)
 
 (* operators *)
 let uop_addressof = unary_op bitwise_and AST.AddressOf

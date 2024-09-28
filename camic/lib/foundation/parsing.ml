@@ -25,13 +25,10 @@ struct
   (** try to parse m, which means state will not be changed if parsing falied *)
   let ( ~? ) m = m |- return None
 
-  (** same as `~?`, but handles throwable monad *)
-  let ( ?? ) m : 'a t = fun st -> try run m st with Diag.AbortCompilation _ -> (None, st)
-
   let ( ~$ ) m = Option.some <$> m
   let ( <$$> ) f m = Option.map f <$> m
-  let ( |$ ) m f = f <$> m
-  let ( |$$ ) m f = f <$$> m
+  let ( --> ) m f = f <$> m
+  let ( ->> ) m f = f <$$> m
 
   let ( *>! ) ma mb =
     let$* _ = ma in

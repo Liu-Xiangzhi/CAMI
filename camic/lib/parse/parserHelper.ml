@@ -10,7 +10,7 @@ let is_typedef_name id =
   let rec lookup = function [] -> false | head :: tail -> if Unicode.Set.mem id head then true else lookup tail in
   gets (fun st -> lookup st.typedefs)
 
-let position_of m = m |$$ fun (x : Token.t) -> x.position
+let position_of m = m ->> fun (x : Token.t) -> x.position
 
 let current_position =
   let$ st = get () in
@@ -21,8 +21,8 @@ let diag msg =
   let$ pos = current_position in
   Diag.parsing pos msg
 
-let unary_op op v = position_of op |$$ fun pos : AST.unary_operator -> { v; pos }
-let binary_op op v = position_of op |$$ fun pos : AST.binary_operator -> { v; pos }
+let unary_op op v = position_of op ->> fun pos : AST.unary_operator -> { v; pos }
+let binary_op op v = position_of op ->> fun pos : AST.binary_operator -> { v; pos }
 
 let binary_expression op expr =
-  expr ++! many (op ++ expr) |$$ Utils.uncurry @@ List.fold_left @@ fun acc (op, e) -> AST.Binary { op; lhs = acc; rhs = e }
+  expr ++! many (op ++ expr) ->> (Utils.uncurry @@ List.fold_left @@ fun acc (op, e) -> AST.Binary { op; lhs = acc; rhs = e })

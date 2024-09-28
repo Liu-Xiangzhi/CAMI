@@ -1,4 +1,4 @@
-type state = Preprocessor.state
+type state = Lexpps.state
 
 type basic_identifier = {
   position : Token.position;
@@ -7,7 +7,7 @@ type basic_identifier = {
 
 type e_char = {
   escaped : bool;
-  v : int;
+  v : int64;
 }
 
 type s_char_sequence = {
@@ -18,9 +18,9 @@ type s_char_sequence = {
 
 module Lexer = Parsing.Make (struct
   type t = state
-  type payload = Preprocessor.pchar
+  type payload = Lexpps.pchar
 
-  let run1 = Preprocessor.next_pchar
+  let run1 = Lexpps.next_pchar
 end)
 
 let create pps_state = pps_state
@@ -77,18 +77,74 @@ let keywords_map =
     |> add (Unicode.of_ascii "void") { position; value = Void }
     |> add (Unicode.of_ascii "volatile") { position; value = Volatile }
     |> add (Unicode.of_ascii "while") { position; value = While }
+    |> add (Unicode.of_ascii "_Alignas") { position; value = Alignas }
+    |> add (Unicode.of_ascii "_Alignof") { position; value = Alignof }
     |> add (Unicode.of_ascii "_Atomic") { position; value = Atomic }
     |> add (Unicode.of_ascii "_BitInt") { position; value = BitInt }
+    |> add (Unicode.of_ascii "_Bool") { position; value = Bool }
     |> add (Unicode.of_ascii "_Complex") { position; value = Complex }
     |> add (Unicode.of_ascii "_Decimal128") { position; value = Decimal128 }
     |> add (Unicode.of_ascii "_Decimal32") { position; value = Decimal32 }
     |> add (Unicode.of_ascii "_Decimal64") { position; value = Decimal64 }
     |> add (Unicode.of_ascii "_Generic") { position; value = Generic }
     |> add (Unicode.of_ascii "_Imaginary") { position; value = Imaginary }
-    |> add (Unicode.of_ascii "_Noreturn") { position; value = Noreturn })
+    |> add (Unicode.of_ascii "_Noreturn") { position; value = Noreturn }
+    |> add (Unicode.of_ascii "_Static_assert") { position; value = StaticAssert }
+    |> add (Unicode.of_ascii "_Thread_local") { position; value = ThreadLocal })
 
 let some = Option.some
-let pchar_array_to_u32string = Array.map (fun (pchar : Preprocessor.pchar) -> pchar.v)
+let pchar_array_to_u32string = Array.map (fun (pchar : Lexpps.pchar) -> pchar.v)
+
+let conv_uchar v ecd pos =
+  let bytes = Utils.uint_to_bytes 4 v in
+  try Encoding.conv (if Sys.big_endian then "UTF-32BE" else "UTF-32LE") ecd bytes Encoding.Interrupt
+  with e -> Diag.lexical pos @@ Printf.sprintf "cannot convert to %s, %s" ecd (Printexc.to_string e)
+
+let conv_echar prefix pos to_char ec =
+  assert (ec.v >= 0L && ec.v <= 0xffff_ffffL);
+  let error () = Diag.lexical pos "character is not representable in the corresponding code unit" in
+  let to_ ecd size ec =
+    let max = Int64.sub (Int64.shift_left 1L (size * 8)) 1L in
+    if ec.escaped then (
+      if ec.v > max then error ();
+      Utils.uint_to_bytes size ec.v)
+    else conv_uchar ec.v ecd pos
+  in
+  let to_multibyte ec =
+    if to_char then (
+      let bytes = to_ !Config.execution_wide_charset 4 ec in
+      let v = Utils.z_of_bytes (Bytes.length bytes) bytes in
+      if v > Z.of_int 0xff then error ();
+      let v = Z.to_int64 v in
+      let v = if !Config.char_as_schar then Utils.reinterpret_unsigned_as_signed 1 v else v in
+      [ Value.Basic (BasicValue.Int (Option.get @@ BasicValue.Int.of_int64 v)) ])
+    else to_ !Config.execution_charset 1 ec |> Bytes.to_seq |> List.of_seq |> List.map (fun c -> Value.Basic (BasicValue.Char c))
+  in
+  let to_utf8 ec =
+    if to_char then (
+      let bytes = to_ !Config.execution_wide_charset 4 ec in
+      let v = Utils.z_of_bytes (Bytes.length bytes) bytes in
+      if v > Z.of_int 0xff then error ();
+      [ Value.Basic (BasicValue.UChar (char_of_int @@ Z.to_int v)) ])
+    else
+      ec.v |> Int64.to_int |> Uchar.of_int |> Unicode.uchar_to_u8_bytes |> Bytes.to_seq |> List.of_seq
+      |> List.map (fun c -> Value.Basic (BasicValue.UChar c))
+  in
+  let to_wide ec =
+    let bytes = to_ !Config.execution_wide_charset 4 ec in
+    let v = Utils.z_of_bytes (Bytes.length bytes) bytes in
+    if v > Z.of_int64 0xffff_ffffL then error ();
+    [ Value.Basic (BasicValue.int32 @@ Utils.reinterpret_unsigned_as_signed 4 @@ Z.to_int64 v) ]
+  in
+  match prefix with
+  | _ when Unicode.(prefix =? "") -> to_multibyte ec
+  | _ when Unicode.(prefix =? "u8") -> to_utf8 ec
+  | _ when Unicode.(prefix =? "u") ->
+      ec.v |> Int64.to_int |> Uchar.of_int |> Unicode.uchar_to_u16 |> List.map (fun c -> Value.Basic (BasicValue.uint16 @@ Int64.of_int c))
+  | _ when Unicode.(prefix =? "U") -> [ Value.Basic (BasicValue.uint32 ec.v) ]
+  | _ when Unicode.(prefix =? "L") -> to_wide ec
+  | _ -> assert false
+
 let take_if' pred = take_if (fun pchar -> pred pchar.v)
 let take_while' pred = take_while (fun pchar -> pred pchar.v)
 
@@ -111,7 +167,7 @@ let char_of' c =
 
 let current_position =
   let$ st = get () in
-  let pchar, _ = Preprocessor.next_pchar st in
+  let pchar, _ = Lexpps.next_pchar st in
   match pchar with None -> return ({ file = ""; line = 0; column = 1 } (*dummy*) : Token.position) | Some pchar' -> return pchar'.pos
 
 let punctuator =
@@ -167,7 +223,7 @@ let punctuator =
 let basic_identifier =
   let$* pchar = ~?(take_if' (fun uc -> Unicode.(is_xid_start uc || uc = '_'))) in
   let$ xid_continues = take_while' Unicode.is_xid_continue in
-  return @@ Some { position = pchar.pos; v = Array.of_list (pchar.v :: List.map (fun (x : Preprocessor.pchar) -> x.v) xid_continues) }
+  return @@ Some { position = pchar.pos; v = Array.of_list (pchar.v :: List.map (fun (x : Lexpps.pchar) -> x.v) xid_continues) }
 
 let identifier =
   let$* id = basic_identifier in
@@ -196,7 +252,7 @@ let number =
   let digit_sequence_if f =
     let digit = take_if' f in
     let digit_with_delimiter = digit |- char_of '\'' *> digit in
-    digit ++! many digit_with_delimiter |$$ Utils.uncurry List.cons
+    digit ++! many digit_with_delimiter ->> Utils.uncurry List.cons
   in
   let digit_sequence = digit_sequence_if Unicode.is_digit in
   let hex_digit_sequence = digit_sequence_if Unicode.is_hex_digit in
@@ -222,7 +278,7 @@ let number =
   let fractional_of sequence =
     let$ ds1 = ~?sequence in
     match ds1 with
-    | None -> char_of '.' ++ sequence |$$ Utils.uncurry List.cons
+    | None -> char_of '.' ++ sequence ->> Utils.uncurry List.cons
     | Some ds1' ->
         let$* dot = char_of '.' in
         let$ ds2 = ~?sequence in
@@ -231,13 +287,13 @@ let number =
   let fraction = fractional_of digit_sequence in
   let hex_fraction = fractional_of hex_digit_sequence in
   let hex_float =
-    (hex_fraction |- hex_digit_sequence) ++ exponent 'p' |$$ fun (frac_or_ds, exp) ->
+    (hex_fraction |- hex_digit_sequence) ++ exponent 'p' ->> fun (frac_or_ds, exp) ->
     frac_or_ds @ exp |> Array.of_list |> pchar_array_to_u32string
   in
   let dec_float =
-    let pattern1 = fraction ++! (~?(exponent 'e') |$ Option.value ~default:[]) |$$ Utils.uncurry ( @ ) in
-    let pattern2 = digit_sequence ++ exponent 'e' |$$ Utils.uncurry ( @ ) in
-    pattern1 |- pattern2 |$$ fun num_list -> num_list |> Array.of_list |> pchar_array_to_u32string
+    let pattern1 = fraction ++! (~?(exponent 'e') --> Option.value ~default:[]) ->> Utils.uncurry ( @ ) in
+    let pattern2 = digit_sequence ++ exponent 'e' ->> Utils.uncurry ( @ ) in
+    (pattern1 |- pattern2) ->> fun num_list -> num_list |> Array.of_list |> pchar_array_to_u32string
   in
   let ( =@ ) ustr str = Unicode.(ustr =? str || ustr =? String.uppercase_ascii str) in
   let floating is_hex =
@@ -299,40 +355,43 @@ let number =
   if radix = 10 || radix = 16 then floating (radix = 16) |- integer radix else integer radix
 
 let escaped_sequence =
-  let oct_digit = take_if' Unicode.is_octal_digit in
-  let hex_digit = take_if' Unicode.is_hex_digit in
-  let octal =
-    let to_int (d : Preprocessor.pchar) = Uchar.to_int d.v - int_of_char '0' in
-    let$* d1 = oct_digit in
-    let$ d2 = ~?oct_digit in
-    match d2 with
-    | None -> return @@ some @@ Uchar.to_int d1.v
-    | Some d2' -> (
-        let$ d3 = ~?oct_digit in
-        match d3 with
-        | None -> return @@ Some ((to_int d1 * 8) + to_int d2')
-        | Some d3' -> return @@ Some ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
+  let escaped_sequence' =
+    let oct_digit = take_if' Unicode.is_octal_digit in
+    let hex_digit = take_if' Unicode.is_hex_digit in
+    let octal =
+      let to_int (d : Lexpps.pchar) = Uchar.to_int d.v - int_of_char '0' in
+      let$* d1 = oct_digit in
+      let$ d2 = ~?oct_digit in
+      match d2 with
+      | None -> return @@ some @@ Uchar.to_int d1.v
+      | Some d2' -> (
+          let$ d3 = ~?oct_digit in
+          match d3 with
+          | None -> return @@ Some ((to_int d1 * 8) + to_int d2')
+          | Some d3' -> return @@ Some ((to_int d1 * 16) + (to_int d2' * 8) + to_int d3'))
+    in
+    let hex =
+      let$ pos = current_position in
+      let$* ds = many1 hex_digit in
+      match ds |> List.map (fun (x : Lexpps.pchar) -> x.v) |> Array.of_list |> Unicode.z_of_string Unicode.Hexdecimal with
+      | Some v when v <= Z.of_int64 0xffff_ffffL -> return @@ Some (Z.to_int64 v)
+      | _ -> Diag.lexical pos "too large hexdecimal escaped sequence(bigger than 0xffff'ffff)"
+    in
+    let$* pchar = char_of '\\' *> take1 in
+    let open Unicode in
+    match pchar.v with
+    | c when c = '\'' || c = '"' || c = '?' || c = '\\' -> return @@ some @@ Int64.of_int @@ Uchar.to_int c
+    | c when c = 'a' -> return @@ Some 0x07L
+    | c when c = 'b' -> return @@ Some (Int64.of_int @@ int_of_char '\b')
+    | c when c = 'f' -> return @@ Some 0x0cL
+    | c when c = 'n' -> return @@ Some (Int64.of_int @@ int_of_char '\n')
+    | c when c = 'r' -> return @@ Some (Int64.of_int @@ int_of_char '\r')
+    | c when c = 't' -> return @@ Some (Int64.of_int @@ int_of_char '\t')
+    | c when c = 'v' -> return @@ Some 0x0bL
+    | c when c = 'x' -> hex
+    | _ -> octal ->> Int64.of_int
   in
-  let hex =
-    let$ pos = current_position in
-    let$* ds = many1 hex_digit in
-    match ds |> List.map (fun (x : Preprocessor.pchar) -> x.v) |> Array.of_list |> Unicode.int_of_string Unicode.Hexdecimal with
-    | Some v when v < 0xffff_ffff -> return @@ Some v
-    | _ -> Diag.lexical pos "too large hexdecimal escaped sequence(bigger than 0xffff'ffff)"
-  in
-  let$* pchar = char_of '\\' *> take1 in
-  let open Unicode in
-  match pchar.v with
-  | c when c = '\'' || c = '"' || c = '?' || c = '\\' -> return @@ some @@ Uchar.to_int c
-  | c when c = 'a' -> return @@ Some 0x07
-  | c when c = 'b' -> return @@ Some (int_of_char '\b')
-  | c when c = 'f' -> return @@ Some 0x0c
-  | c when c = 'n' -> return @@ Some (int_of_char '\n')
-  | c when c = 'r' -> return @@ Some (int_of_char '\r')
-  | c when c = 't' -> return @@ Some (int_of_char '\t')
-  | c when c = 'v' -> return @@ Some 0x0b
-  | c when c = 'x' -> hex
-  | _ -> octal
+  escaped_sequence' ->> fun v -> { escaped = true; v }
 
 let encoding_prefix = string_of_any [| "u8"; "u"; "U"; "L" |]
 
@@ -340,7 +399,8 @@ let character =
   let$ position = current_position in
   let c_char =
     let regular_char =
-      take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n')) |$$ fun (x : Preprocessor.pchar) -> Uchar.to_int x.v
+      take_if' (fun x -> Unicode.(x <> '\'' && x <> '\\' && x <> '\n')) ->> fun (x : Lexpps.pchar) ->
+      { escaped = false; v = Int64.of_int @@ Uchar.to_int x.v }
     in
     escaped_sequence |- regular_char
   in
@@ -348,16 +408,16 @@ let character =
   let encoding' = Option.value encoding ~default:[||] |> pchar_array_to_u32string in
   let$* _ = char_of '\'' in
   let$* c_char_seq = many1 c_char in
-  let char_value =
+  let cc =
     match c_char_seq with
     | c :: [] -> c
     | c :: _ :: _ ->
         if Unicode.(encoding' =? "" || encoding' =? "L") then Diag.Warning.lexical position "more than one character in character constant"
-        else Diag.lexical position "more than one character in unicode character constant";
+        else Diag.lexical position "more than one character in unicode character constant, characters except the first one is ignored";
         c
     | _ -> assert false
   in
-  assert (char_value > 0);
+  assert (cc.v >= 0L && cc.v <= 0xffff_ffffL);
   let$ delimiter = take1 in
   (match delimiter with
   | None -> Diag.lexical position "unclosed character constant"
@@ -366,26 +426,18 @@ let character =
       assert (Unicode.(pchar.v = '\n' || pchar.v = '\\'));
       Diag.lexical position "Newline or dissociative backslash character in character constant");
   let open Token in
-  let return_result v = return @@ Some { position; value = Character (Value.Basic v) } in
-  let extension x = if !Config.char_as_schar then (-1 lsl 8) lor x else x in
-  match encoding' with
-  | e when Unicode.(e =? "") && char_value <= 0xff ->
-      return_result (BasicValue.Int (Option.get @@ BasicValue.Int.of_int64 @@ Int64.of_int @@ extension char_value))
-  | e when Unicode.(e =? "u8") && char_value <= 0xff -> return_result (BasicValue.UChar (char_of_int char_value))
-  | e when Unicode.(e =? "u") && char_value <= 0xffff -> return_result (BasicValue.of_uint16 (Int64.of_int char_value))
-  | e when Unicode.(e =? "U") && char_value <= 0xffff_ffff -> return_result (BasicValue.of_uint32 (Int64.of_int char_value))
-  | e when Unicode.(e =? "L") && char_value <= 0xffff_ffff -> return_result (BasicValue.of_int32 (Int64.of_int char_value))
+  match conv_echar encoding' position true cc with
+  | [v] -> return @@ Some { position; value = Character v }
   | _ -> Diag.lexical position "Constant value is not representable in the corresponding code unit"
 
 let string_literal =
   let$ position = current_position in
   let s_char =
     let regular_char =
-      take_if' (fun x -> Unicode.(x <> '"' && x <> '\\' && x <> '\n')) |$$ fun (x : Preprocessor.pchar) ->
-      { escaped = false; v = Uchar.to_int x.v }
+      take_if' (fun x -> Unicode.(x <> '"' && x <> '\\' && x <> '\n')) ->> fun (x : Lexpps.pchar) ->
+      { escaped = false; v = Int64.of_int @@ Uchar.to_int x.v }
     in
-    let escaped_sequence' = escaped_sequence |$$ fun v -> { escaped = true; v } in
-    escaped_sequence' |- regular_char
+    escaped_sequence |- regular_char
   in
   let s_char_sequence = many1 s_char in
   let$ ecd = ~?encoding_prefix in
@@ -402,8 +454,8 @@ let string_literal =
   return @@ Some { position; encoding; seq = s_char_seq }
 
 let pragma =
-  let rec split (str : Preprocessor.pchar list) =
-    let rec id (s : Preprocessor.pchar list) =
+  let rec split (str : Lexpps.pchar list) =
+    let rec id (s : Lexpps.pchar list) =
       match s with
       | [] -> ([], [])
       | c :: s' when not @@ Unicode.is_space c.v ->
@@ -422,7 +474,7 @@ let pragma =
   let$* payload = string_of "pragma" *> take_if' Unicode.is_space *>! take_while' (fun x -> Unicode.(x <> '\n')) in
   return @@ Some ({ position = hash.pos; value = Token.Pragma (Array.of_list @@ split payload) } : Token.t)
 
-let error = take1 |$$ fun pchar -> Diag.lexical pchar.pos "Failed to parse token"
+let error = take1 ->> fun pchar -> Diag.lexical pchar.pos "Failed to parse token"
 let token' = pragma |- number |- punctuator |- character |- identifier |- error
 
 let concat_string_literal (string_literals : s_char_sequence list) =
@@ -434,50 +486,21 @@ let concat_string_literal (string_literals : s_char_sequence list) =
         let pf = s.encoding in
         if Unicode.(prefix =? "") then get_prefix ss pf else if Unicode.(pf =? "" || prefix === pf) then get_prefix ss prefix else None
   in
-  let concat_values s = List.fold_right (fun x acc -> x @ acc) s [ { escaped = false; v = 0 } ] in
+  let concat_values s = List.fold_right (fun x acc -> x @ acc) s [ { escaped = false; v = 0L } ] in
   let open Token in
   let transform prefix s =
-    let error () =
-      Diag.lexical position "One of the value of element of string literal is not representable in the corresponding code unit"
-    in
-    let to_8 is_utf8 sc =
-      if sc.escaped then (
-        if sc.v > 0xff then error ();
-        let c = char_of_int sc.v in
-        [ Value.Basic (if is_utf8 then BasicValue.UChar c else BasicValue.Char c) ])
-      else
-        Uchar.of_int sc.v |> Unicode.uchar_to_u8_bytes |> Bytes.to_seq |> List.of_seq
-        |> List.map (fun c -> Value.Basic (if is_utf8 then BasicValue.UChar c else BasicValue.Char c))
-    in
-    let to_utf16 sc =
-      if sc.escaped then (
-        if sc.v > 0xffff then error ();
-        [ Value.Basic (BasicValue.of_uint16 (Int64.of_int sc.v)) ])
-      else Uchar.of_int sc.v |> Unicode.uchar_to_u16 |> List.map (fun c -> Value.Basic (BasicValue.of_uint16 (Int64.of_int c)))
-    in
-    let to_wide is_utf32 sc =
-      if sc.escaped && sc.v > 0xffff_ffff then error ();
-      let v = Int64.of_int sc.v in
-      [ Value.Basic (if is_utf32 then BasicValue.of_uint32 v else BasicValue.of_int32 v) ]
-    in
-    let open Unicode in
-    let transfomer =
+    let encoding_name prefix =
+      let open Unicode in
       match prefix with
-      | _ when prefix =? "" (* multibyte considered as u8, except type *) -> to_8 false
-      | _ when prefix =? "u8" -> to_8 true
-      | _ when prefix =? "u" -> to_utf16
-      | _ when prefix =? "U" -> to_wide true
-      | _ when prefix =? "L" (* wide considered as u32, except type *) -> to_wide false
+      | _ when prefix =? "" -> !Config.execution_charset
+      | _ when prefix =? "u8" -> "UTF-8"
+      | _ when prefix =? "u" -> "UTF-16"
+      | _ when prefix =? "U" -> "UTF-32"
+      | _ when prefix =? "L" -> !Config.execution_wide_charset
       | _ -> assert false
     in
-    let parse_encoding = function
-      | _ when prefix =? "" || prefix =? "u8" -> Utf8
-      | _ when prefix =? "u" -> Utf16
-      | _ when prefix =? "U" || prefix =? "L" -> Utf32
-      | _ -> assert false
-    in
-    let v = Value.Array (Array.of_list @@ List.fold_right (fun x acc -> transfomer x @ acc) s []) in
-    { position; value = StringLiteral (v, parse_encoding prefix) }
+    let v = Value.Array (s |> List.map (conv_echar prefix position false) |> List.concat |> Array.of_list) in
+    { position; value = StringLiteral (v, encoding_name prefix) }
   in
   match get_prefix string_literals [||] with
   | None -> Diag.lexical position "inconsistant prefix in string sequence"
@@ -485,7 +508,7 @@ let concat_string_literal (string_literals : s_char_sequence list) =
 
 let token =
   let spaces = take_while' Unicode.is_space in
-  let concatenated_string_literal = sequence1 string_literal ~delimiter:(Option.some <$> spaces) |$$ concat_string_literal in
+  let concatenated_string_literal = sequence1 string_literal ~delimiter:~$spaces ->> concat_string_literal in
   spaces *!> (concatenated_string_literal |- token')
 
 let next_token st = run token st

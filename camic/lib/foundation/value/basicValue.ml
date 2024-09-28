@@ -10,11 +10,17 @@ end
 module type IntegerType = sig
   type t
 
+  val size: int
+  val max : t
+  val min : t
   val show : t -> string
   val of_string : ?base:int -> Unicode.string -> t option
   val of_int64 : int64 -> t option
   val of_uint64 : int64 -> t option
   val of_Z : Z.t -> t option
+  val to_Z: t -> Z.t
+  val to_int: t -> int
+  val to_int64: t -> int64
 end
 
 module type FloatType = sig
@@ -27,6 +33,16 @@ end
 
 module MakeInteger (IA : IntegerAtrribute) : IntegerType = struct
   type t = Z.t
+
+  let size = IA.size
+  let max =
+    let ( << ) = Z.shift_left in
+    let ( -- ) = Z.sub in
+    if IA.unsigned then (Z.of_int 1 << IA.size * 8) -- Z.of_int 1 else (Z.of_int 1 << (IA.size * 8) - 1) -- Z.of_int 1
+
+  let min =
+    let ( << ) = Z.shift_left in
+    if IA.unsigned then Z.of_int 0 else Z.neg (Z.of_int 1 << (IA.size * 8) - 1)
 
   let show = Z.to_string
 
@@ -48,6 +64,9 @@ module MakeInteger (IA : IntegerAtrribute) : IntegerType = struct
   let of_int64 x = constructor @@ Z.of_int64 x
   let of_uint64 x = constructor @@ Z.of_int64_unsigned x
   let of_Z x = constructor @@ x
+  let to_Z x = x
+  let to_int = Z.to_int
+  let to_int64 = Z.to_int64
 end
 
 module MakeFloat (FA : FloatAttribute) : FloatType = struct
@@ -131,45 +150,68 @@ type t =
   | LongDouble of LongDouble.t
   | Bool of bool
 
-let of_int16 x =
+let int16 x =
   assert (!Config.short_size = 2);
   (* TODO: change here if customization of config is supported *)
-  assert (x >= Int64.of_int (-0x8000) && x <= Int64.of_int 0x7fff);
+  assert (x >= -0x8000L && x <= 0x7fffL);
   Short (Option.get @@ Short.of_int64 x)
 
-let of_uint16 x =
+let uint16 x =
   assert (!Config.short_size = 2);
-  assert (x >= Int64.of_int 0 && x <= Int64.of_int 0xffff);
+  assert (x >= 0L && x <= 0xffffL);
   UShort (Option.get @@ UShort.of_int64 x)
 
-let of_int32 x =
+let int32 x =
   assert (!Config.int_size = 4);
-  assert (x >= Int64.of_int (-0x8000_0000) && x <= Int64.of_int 0x7fff_ffff);
+  assert (x >= -0x8000_0000L && x <= 0x7fff_ffffL);
   Int (Option.get @@ Int.of_int64 x)
 
-let of_uint32 x =
+let uint32 x =
   assert (!Config.int_size = 4);
-  assert (x >= Int64.of_int 0 && x <= Int64.of_int 0xffff_ffff);
+  assert (x >= 0L && x <= 0xffff_ffffL);
   UInt (Option.get @@ UInt.of_int64 x)
 
-let of_int64 x =
+let int64 x =
   assert (!Config.long_size = 8);
   Int (Option.get @@ Int.of_int64 x)
 
-let of_uint64 x =
+let uint64 x =
   assert (!Config.long_size = 8);
   ULong (Option.get @@ ULong.of_uint64 x)
 
 let ( let* ) = Option.bind
-let short_of_Z z = let* v = Short.of_Z z in Some (Short v)
-let ushort_of_Z z = let* v = UShort.of_Z z in Some (UShort v)
-let int_of_Z z = let* v = Int.of_Z z in Some (Int v)
-let uint_of_Z z = let* v = UInt.of_Z z in Some (UInt v)
-let long_of_Z z = let* v = Long.of_Z z in Some (Long v)
-let ulong_of_Z z = let* v = ULong.of_Z z in Some (ULong v)
-let longlong_of_Z z = let* v = LongLong.of_Z z in Some (LongLong v)
-let ulonglong_of_Z z = let* v = ULongLong.of_Z z in Some (ULongLong v)
 
+let short_of_Z z =
+  let* v = Short.of_Z z in
+  Some (Short v)
+
+let ushort_of_Z z =
+  let* v = UShort.of_Z z in
+  Some (UShort v)
+
+let int_of_Z z =
+  let* v = Int.of_Z z in
+  Some (Int v)
+
+let uint_of_Z z =
+  let* v = UInt.of_Z z in
+  Some (UInt v)
+
+let long_of_Z z =
+  let* v = Long.of_Z z in
+  Some (Long v)
+
+let ulong_of_Z z =
+  let* v = ULong.of_Z z in
+  Some (ULong v)
+
+let longlong_of_Z z =
+  let* v = LongLong.of_Z z in
+  Some (LongLong v)
+
+let ulonglong_of_Z z =
+  let* v = ULongLong.of_Z z in
+  Some (ULongLong v)
 
 let typeof = function
   | Char _ -> Type.Char
@@ -189,9 +231,8 @@ let typeof = function
   | Bool _ -> Type.Bool
 
 let show = function
-  | Char c -> Printf.sprintf "'%c'" c
-  | SChar c -> Printf.sprintf "'%c'" c
-  | UChar c -> Printf.sprintf "'%c'" c
+  | Char c | SChar c | UChar c ->
+      if int_of_char c >= 32 && int_of_char c <= 126 then Printf.sprintf "'%c'" c else Printf.sprintf "'\\x%02x'" (int_of_char c)
   | Short i -> Short.show i
   | UShort i -> UShort.show i
   | Int i -> Int.show i

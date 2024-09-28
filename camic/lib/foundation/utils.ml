@@ -14,18 +14,77 @@ let flatten2 x =
   (a, b, c, d)
 
 let flatten3 x =
-  let ((a, b), c), d = x in
-  (a, b, c, d)
-
-let flatten4 x =
   let (((a, b), c), d), e = x in
   (a, b, c, d, e)
 
-let flatten5 x =
+let flatten4 x =
   let ((((a, b), c), d), e), f = x in
   (a, b, c, d, e, f)
 
 let uncurry f (a, b) = f a b
+
+let uint_of_bytes len b =
+  assert (len > 0 && len <= 8 && Bytes.length b >= len);
+  let res = ref 0L in
+  if Sys.big_endian then
+    for i = 0 to len - 1 do
+      let v = Int64.of_int @@ int_of_char @@ Bytes.get b i in
+      res := Int64.add (Int64.shift_left !res 8) v
+    done
+  else
+    for i = len - 1 downto 0 do
+      let v = Int64.of_int @@ int_of_char @@ Bytes.get b i in
+      res := Int64.add (Int64.shift_left !res 8) v
+    done;
+  !res
+
+let uint_to_bytes len x =
+  assert (len > 0 && len <= 8);
+  let b = Bytes.create len in
+  for i = 0 to len - 1 do
+    let v = Int64.logand (Int64.shift_right_logical x (i * 8)) 0xffL in
+    Bytes.set b (if Sys.big_endian then len - 1 - i else i) @@ char_of_int @@ Int64.to_int v
+  done;
+  b
+
+let z_to_bytes len x =
+  assert (x > Z.of_int 0);
+  let b = Bytes.create len in
+  for i = 0 to len - 1 do
+    let v = Z.logand (Z.shift_right_trunc x (i * 8)) (Z.of_int 0xff) in
+    Bytes.set b (if Sys.big_endian then len - 1 - i else i) @@ char_of_int @@ Z.to_int v
+  done;
+  b
+
+let z_of_bytes len b =
+  assert (Bytes.length b >= len);
+  let res = ref @@ Z.of_int 0 in
+  if Sys.big_endian then
+    for i = 0 to len - 1 do
+      let v = Z.of_int @@ int_of_char @@ Bytes.get b i in
+      res := Z.add (Z.shift_left !res 8) v
+    done
+  else
+    for i = len - 1 downto 0 do
+      let v = Z.of_int @@ int_of_char @@ Bytes.get b i in
+      res := Z.add (Z.shift_left !res 8) v
+    done;
+  !res
+
+let uint_array_of_bytes len b =
+  assert (len > 0 && len <= 8);
+  let insufficient = Bytes.length b mod len <> 0 in
+  let array_len = (Bytes.length b / len) + if insufficient then 1 else 0 in
+  Array.init array_len (fun i ->
+      let sub_size = if insufficient && i = array_len - 1 then Bytes.length b mod len else len in
+      uint_of_bytes sub_size @@ Bytes.sub b (i * len) sub_size)
+
+let reinterpret_unsigned_as_signed len v =
+  assert (len > 0 && len <= 8);
+  let ( << ) = Int64.shift_left in
+  let ( >> ) = Int64.shift_right in
+  let shift_size = 64 - (len * 8) in
+  v << shift_size >> shift_size
 
 module Color = struct
   let red' = "\x1b[31m"

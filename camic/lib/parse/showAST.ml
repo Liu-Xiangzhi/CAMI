@@ -153,7 +153,7 @@ let show ast =
     in
     let association ((tp : type_or_default), exp) =
       result ++ stmt "Association" +! ();
-      (match tp with Default -> show' (fun _ -> result ++ "default" +! ()) () | Type tp' -> show' type_name tp');
+      (match tp with Default pos -> show' (fun _ -> result ++ "default " ++ location pos +! ()) () | Type tp' -> show' type_name tp');
       show_last expression exp
     in
     match e with
@@ -197,7 +197,7 @@ let show ast =
     | Identifier id -> result ++ expr "Identifier " ++ fmt_id id +! ()
     | Constant { v; pos } -> result ++ expr "Constant " ++ location pos ++ " " ++ value (Value.show v) +! ()
     | StringLiteral { sl; encoding; pos } ->
-        result ++ expr "StringLiteral " ++ location pos ++ " " ++ Token.show_encoding encoding ++ " " ++ Value.show sl +! ()
+        result ++ expr "StringLiteral " ++ location pos ++ " " ++ encoding ++ " " ++ Value.show sl +! ()
     | Generic { control; assoc_list; pos } ->
         result ++ expr "GenericExpression " ++ location pos +! ();
         show' expression control;
@@ -421,14 +421,15 @@ let show ast =
       Option.iter (show' designation) dsg;
       show_last initializer_ init
     in
-    result ++ "BracedInitializer" +! ();
-    if List.is_empty bi then show_last (fun _ -> result ++ decl "EmptyInitializer" +! ()) () else iter_trailing item bi
+    result ++ "BracedInitializer " ++ location bi.pos +! ();
+    if List.is_empty bi.v then show_last (fun _ -> result ++ decl "EmptyInitializer" +! ()) () else iter_trailing item bi.v
   and designation dsg =
-    let designator = function
+    let designator (d : AST.designator) =
+      match d.v with
       | Subscript exp ->
-          result ++ decl "SubscriptDesignator" +! ();
+          result ++ decl "SubscriptDesignator " ++ location d.pos +! ();
           show_last expression exp
-      | Member id -> result ++ decl "MemberDisgnator " ++ fmt_id id +! ()
+      | Member id -> result ++ decl "MemberDisgnator " ++ location d.pos ++ " " ++ fmt_id id +! ()
     in
     result ++ decl "Designation" +! ();
     iter_trailing designator dsg
@@ -456,16 +457,18 @@ let show ast =
     | Default { v; pos } ->
         result ++ stmt "Label default " ++ location pos +! ();
         show' attributes v
-  and unlabeled_statement { v; pos } =
-    match v with
-    | Null -> result ++ stmt "NullStatement " ++ location pos +! ()
-    | Expression { attr; v } ->
+  and unlabeled_statement { v = { attr; v }; pos } =
+    result ++ stmt "UnlabeledStatement " ++ location pos +! ();
+    show' attributes attr;
+    show_last unlabeled_statement' v
+  and unlabeled_statement' = function
+    | Null -> result ++ stmt "NullStatement" +! ()
+    | Expression v ->
         result ++ stmt "ExpressionStatement" +! ();
-        show' attributes attr;
         show_last expression v
     | Compound cs -> compound_statement cs
     | If { cond; if_stmt; else_stmt } -> (
-        result ++ stmt "IfStatement " ++ location pos +! ();
+        result ++ stmt "IfStatement" +! ();
         show' expression cond;
         match else_stmt with
         | None -> show_last statement if_stmt
@@ -473,34 +476,34 @@ let show ast =
             show' statement if_stmt;
             show_last statement st)
     | Switch { control; stmt = st } ->
-        result ++ stmt "SwitchStatement " ++ location pos +! ();
+        result ++ stmt "SwitchStatement" +! ();
         show' expression control;
         show_last statement st
     | While { cond; stmt = st } ->
-        result ++ stmt "WhileStatement " ++ location pos +! ();
+        result ++ stmt "WhileStatement" +! ();
         show' expression cond;
         show_last statement st
     | Do { cond; stmt = st } ->
-        result ++ stmt "DoStatement " ++ location pos +! ();
+        result ++ stmt "DoStatement" +! ();
         show' expression cond;
         show_last statement st
     | For { exp1; cond; exp3; stmt = st } ->
-        result ++ stmt "ForStatement " ++ location pos +! ();
+        result ++ stmt "ForStatement" +! ();
         Option.iter (show' expression) exp1;
         Option.iter (show' expression) cond;
         Option.iter (show' expression) exp3;
         show_last statement st
     | For' { decl; cond; exp3; stmt = st } ->
-        result ++ stmt "ForStatement " ++ location pos +! ();
+        result ++ stmt "ForStatement" +! ();
         show' declaration decl;
         Option.iter (show' expression) cond;
         Option.iter (show' expression) exp3;
         show_last statement st
-    | Goto id -> result ++ stmt "GotoStatement " ++ location pos ++ " " ++ fmt_id id +! ()
-    | Continue -> result ++ stmt "ContinueStatement " ++ location pos +! ()
-    | Break -> result ++ stmt "BreakStatement " ++ location pos +! ()
+    | Goto id -> result ++ stmt "GotoStatement" ++ " " ++ fmt_id id +! ()
+    | Continue -> result ++ stmt "ContinueStatement" +! ()
+    | Break -> result ++ stmt "BreakStatement" +! ()
     | Return rv ->
-        result ++ stmt "ReturnStatement " ++ location pos +! ();
+        result ++ stmt "ReturnStatement" +! ();
         Option.iter (show_last expression) rv
   and compound_statement { v; pos } =
     result ++ stmt "CompoundStatement " ++ location pos +! ();

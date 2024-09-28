@@ -45,7 +45,7 @@ def main(argv : list[str]):
     if len(argv) > 1 and argv[1] == 'preprocess':
         if len(argv) > 2 and argv[2] == 'bin':
             with open('/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin', 'wb') as f:
-                f.write(p.stdout.decode().encode('utf-8'))
+                f.write(p.stdout)
         else:
             print(p.stdout.decode(), end="")
         return 0
@@ -57,7 +57,7 @@ def main(argv : list[str]):
             f.write(p.stdout.decode().encode('utf-8'))
         subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/camic/_build/default/lib', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin'], env=env)
     else:
-        p = subprocess.run(['/home/liuxiangzhi/projects/cami/camic/_build/install/default/bin/camic'], input=p.stdout.decode().encode('utf-8'), env=env)
+        p = subprocess.run(['/home/liuxiangzhi/projects/cami/camic/_build/install/default/bin/camic'], input=p.stdout, env=env)
         return p.returncode
     return 0
         

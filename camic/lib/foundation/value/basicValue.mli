@@ -1,11 +1,16 @@
 module type IntegerType = sig
   type t
-
+  val size: int
+  val max: t
+  val min: t
   val show : t -> string
   val of_string : ?base:int -> Unicode.string -> t option
   val of_int64: int64 -> t option
   val of_uint64: int64 -> t option
   val of_Z : Z.t -> t option
+  val to_Z: t -> Z.t
+  val to_int: t -> int
+  val to_int64: t -> int64
 end
 
 module type FloatType = sig
@@ -47,12 +52,12 @@ type t =
 
 val typeof: t -> Type.t
 val show: t -> string
-val of_int16: int64 -> t
-val of_uint16: int64 -> t
-val of_int32: int64 -> t
-val of_uint32: int64 -> t
-val of_int64: int64 -> t
-val of_uint64: int64 -> t
+val int16: int64 -> t
+val uint16: int64 -> t
+val int32: int64 -> t
+val uint32: int64 -> t
+val int64: int64 -> t
+val uint64: int64 -> t
 val short_of_Z: Z.t -> t option
 val ushort_of_Z: Z.t -> t option
 val int_of_Z: Z.t -> t option

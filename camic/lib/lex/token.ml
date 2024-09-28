@@ -4,17 +4,12 @@ type position = {
   column : int;
 }
 
-type encoding =
-  | Utf8
-  | Utf16
-  | Utf32
-
 type value =
   | Identifier of Unicode.string
   | Integer of Value.t
   | Floating of Value.t
   | Character of Value.t
-  | StringLiteral of Value.t * encoding
+  | StringLiteral of Value.t * string
   | Pragma of Unicode.string array
   (* keywords *)
   | Alignas
@@ -131,7 +126,7 @@ let is_identifier tk = match tk.value with Identifier _ -> true | _ -> false
 let is_integer tk = match tk.value with Integer _ -> true | _ -> false
 let is_floating tk = match tk.value with Floating _ -> true | _ -> false
 let is_character tk = match tk.value with Character _ -> true | _ -> false
-let is_stringLiteral tk = match tk.value with StringLiteral (_, _) -> true | _ -> false
+let is_string_literal tk = match tk.value with StringLiteral (_, _) -> true | _ -> false
 let is_pragma tk = match tk.value with Pragma _ -> true | _ -> false
 let is_alignas tk = match tk.value with Alignas -> true | _ -> false
 let is_enum tk = match tk.value with Enum -> true | _ -> false
@@ -151,8 +146,8 @@ let is_float tk = match tk.value with Float -> true | _ -> false
 let is_atomic tk = match tk.value with Atomic -> true | _ -> false
 let is_break tk = match tk.value with Break -> true | _ -> false
 let is_for tk = match tk.value with For -> true | _ -> false
-let is_staticAssert tk = match tk.value with StaticAssert -> true | _ -> false
-let is_bitInt tk = match tk.value with BitInt -> true | _ -> false
+let is_static_assert tk = match tk.value with StaticAssert -> true | _ -> false
+let is_bit_int tk = match tk.value with BitInt -> true | _ -> false
 let is_case tk = match tk.value with Case -> true | _ -> false
 let is_goto tk = match tk.value with Goto -> true | _ -> false
 let is_struct tk = match tk.value with Struct -> true | _ -> false
@@ -163,7 +158,7 @@ let is_switch tk = match tk.value with Switch -> true | _ -> false
 let is_decimal128 tk = match tk.value with Decimal128 -> true | _ -> false
 let is_const tk = match tk.value with Const -> true | _ -> false
 let is_inline tk = match tk.value with Inline -> true | _ -> false
-let is_threadLocal tk = match tk.value with ThreadLocal -> true | _ -> false
+let is_thread_local tk = match tk.value with ThreadLocal -> true | _ -> false
 let is_decimal32 tk = match tk.value with Decimal32 -> true | _ -> false
 let is_constexpr tk = match tk.value with Constexpr -> true | _ -> false
 let is_int tk = match tk.value with Int -> true | _ -> false
@@ -179,7 +174,7 @@ let is_typeof tk = match tk.value with Typeof -> true | _ -> false
 let is_imaginary tk = match tk.value with Imaginary -> true | _ -> false
 let is_do tk = match tk.value with Do -> true | _ -> false
 let is_register tk = match tk.value with Register -> true | _ -> false
-let is_typeofUnqual tk = match tk.value with TypeofUnqual -> true | _ -> false
+let is_typeof_unqual tk = match tk.value with TypeofUnqual -> true | _ -> false
 let is_noreturn tk = match tk.value with Noreturn -> true | _ -> false
 let is_double tk = match tk.value with Double -> true | _ -> false
 let is_restrict tk = match tk.value with Restrict -> true | _ -> false
@@ -237,13 +232,9 @@ let is_comma tk = match tk.value with Comma -> true | _ -> false
 let is_hash tk = match tk.value with Hash -> true | _ -> false
 let is_hash_hash tk = match tk.value with HashHash -> true | _ -> false
 
-let show_encoding ecd =
-  let { red; clear; _ } : Utils.Color.t = Utils.Color.get () in
-  let show = function Utf8 -> "UTF-8" | Utf16 -> "UTF-16" | Utf32 -> "UTF-32" in
-  red ^ show ecd ^ clear
-
 let show tk =
-  let { green; yellow; blue; magenta; cyan; clear; _ } : Utils.Color.t = Utils.Color.get () in
+  let { green; yellow; blue; magenta; cyan; clear; red } : Utils.Color.t = Utils.Color.get () in
+  let show_encoding ecd = red ^ ecd ^ clear in
   let show_keyword kw = Printf.sprintf "%s<Keywords>%s %s%s" blue magenta kw clear in
   let show_punc punc = Printf.sprintf "%s<Punctuator>%s %s%s" blue green punc clear in
   let show_value' tag v = Printf.sprintf "%s<%s>%s %s%s" blue tag green v clear in
@@ -329,7 +320,7 @@ let show tk =
     | Tilde -> show_punc "~"
     | Exclamation -> show_punc "!"
     | Div -> show_punc "/"
-    | Mod -> show_punc "%%"
+    | Mod -> show_punc "%"
     | LShift -> show_punc "<<"
     | RShift -> show_punc ">>"
     | Less -> show_punc "<"
