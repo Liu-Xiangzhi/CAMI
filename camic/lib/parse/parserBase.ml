@@ -3,7 +3,7 @@ type state = {
   typedefs : Unicode.Set.t list;
 }
 
-module Parser = Parsing.Make (struct
+module Parser = Parsing.MakeLazy (struct
   type t = state
   type payload = Token.t
 

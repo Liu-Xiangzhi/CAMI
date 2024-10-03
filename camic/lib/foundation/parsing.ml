@@ -1,11 +1,11 @@
-module Make (T : sig
+module type In = sig
   type t
   type payload
 
   val run1 : t -> payload option * t
-end) =
-struct
-  module State = Monad.MakeState (T)
+end
+
+module Make (T : In) (State : Monad.State with type state_t = T.t) = struct
   include State
 
   type 'a t = 'a option State.t
@@ -140,3 +140,6 @@ struct
     let$ payload = ~?(take_if pred) in
     if Option.is_none payload then return [] else List.cons (Option.get payload) <$> take_while pred
 end
+
+module MakeEager (T : In) = Make (T) (Monad.MakeState (T))
+module MakeLazy (T : In) = Make (T) (Monad.Lazy.MakeState (T))

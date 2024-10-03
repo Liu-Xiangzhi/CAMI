@@ -42,25 +42,15 @@ def main(argv : list[str]):
         print(p.stderr.decode(), file=sys.stderr)
         print('Note that warnings(from preprocessor of gcc) about undefining of "__STDC_*" macros just can be ignored', file=sys.stderr)
         return -1
-    if len(argv) > 1 and argv[1] == 'preprocess':
-        if len(argv) > 2 and argv[2] == 'bin':
-            with open('/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin', 'wb') as f:
-                f.write(p.stdout)
-        else:
-            print(p.stdout.decode(), end="")
+    if len(argv) > 1 and (argv[1] == '--preprocess' or argv[1] == '-p'):
+        print(p.stdout.decode(), end="")
         return 0
     env = os.environ.copy()
     ocamlrunparam = env.get("OCAMLRUNPARAM", "")
     env["OCAMLRUNPARAM"] =  "b" if ocamlrunparam == "" else "b," + ocamlrunparam
-    if len(argv) > 1 and argv[1] == 'debug':
-        with open('/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin', 'wb') as f:
-            f.write(p.stdout.decode().encode('utf-8'))
-        subprocess.run(['ocamldebug','-I', '/home/liuxiangzhi/projects/cami/camic/_build/default/lib', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/main.bc', '/home/liuxiangzhi/projects/cami/camic/_build/default/bin/a.bin'], env=env)
-    else:
-        p = subprocess.run(['/home/liuxiangzhi/projects/cami/camic/_build/install/default/bin/camic'], input=p.stdout, env=env)
-        return p.returncode
-    return 0
-        
+    p = subprocess.run(['/home/liuxiangzhi/projects/cami/camic/_build/install/default/bin/camic'] + argv[1:], input=p.stdout, env=env)
+    return p.returncode
+
 
 if __name__ == '__main__':
     import sys

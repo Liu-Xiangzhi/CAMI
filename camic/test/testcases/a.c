@@ -30,7 +30,8 @@ int main()
     printf("hello world\n");
 }
 */
-#pragma a b c
-constexpr int \u4f60 = 0;
-constexpr int b = 你; # ##
-a1 0x1'23'4ull 1.e-10f L'你' . L"abc" "\U00004f60" +=>>=+- / *<:%%bbc+d
+// #pragma a b c
+// constexpr int \u4f60 = 0;
+// constexpr int b = 你; # ##
+// a1 0x1'23'4ull 1.e-10f L'你' . L"abc" "\U00004f60" +=>>=+- / *<:%%bbc+d
+[[aaa]];

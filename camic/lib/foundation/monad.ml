@@ -65,3 +65,50 @@ end) : State with type 'a t = St.t -> 'a * St.t and type state_t = St.t = struct
   let modify f st = ((), f st)
   let run f x = f x
 end
+
+module Lazy = struct
+  module MakeState (St : sig
+    type t
+  end) : State with type 'a t = (St.t -> 'a lazy_t * St.t) lazy_t and type state_t = St.t = struct
+    let ( !! ) = Lazy.force
+
+    type 'a t = (St.t -> 'a lazy_t * St.t) lazy_t
+
+    let ( <$> ) f m =
+      lazy
+        (fun st ->
+          let x, st' = !!m st in
+          (lazy (f !!x), st'))
+
+    let pure x = lazy (fun st -> (lazy x, st))
+
+    let ( <*> ) a b =
+      lazy
+        (fun st ->
+          let f, st' = !!a st in
+          let x, st'' = !!b st' in
+          (lazy (!!f !!x), st''))
+
+    let return = pure
+
+    let ( >>= ) m f =
+      lazy
+        (fun st ->
+          let x, st' = !!m st in
+          !!(f !!x) st')
+
+    let ( >> ) ma mb = ma >>= fun _ -> mb
+
+    type state_t = St.t
+
+    let set st = lazy (fun _ -> (lazy (), st))
+    let get () = lazy (fun st -> (lazy st, st))
+    let pass = lazy (fun st -> (lazy (), st))
+    let gets f = lazy (fun st -> (lazy (f st), st))
+    let modify f = lazy (fun st -> (lazy (), f st))
+
+    let run f x =
+      let v, st = !!f x in
+      (!!v, st)
+  end
+end

@@ -16,7 +16,7 @@ type s_char_sequence = {
   seq : e_char list;
 }
 
-module Lexer = Parsing.Make (struct
+module Lexer = Parsing.MakeEager (struct
   type t = state
   type payload = Lexpps.pchar
 

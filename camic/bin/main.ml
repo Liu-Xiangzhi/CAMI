@@ -50,7 +50,7 @@ let main () =
   let pps_st = Lexpps.create @@ Array.map Uchar.of_int @@ Array.map Int64.to_int @@ Utils.uint_array_of_bytes 4 input' in
   let lexer_st = Lexer.create pps_st in
   let parser_st = Parser.create lexer_st in
-  if !is_show_preprocess_result then show_preprocess_result pps_st else ();
+  if !is_show_lexer_preprocess_result then show_preprocess_result pps_st else ();
   if !is_show_tokenize_result then show_tokenize_result lexer_st else ();
   let ast = Parser.parse parser_st in
   if !is_show_ast then print_endline @@ ShowAST.show ast;

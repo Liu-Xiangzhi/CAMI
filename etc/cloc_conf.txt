@@ -1,0 +1,8 @@
+CAMI Bytecode
+    filter remove_matches ^.*?#
+    extension tbc
+    3rd_gen_scale 0
+Extended Backus-Naur Form
+    filter remove_matches ^.*?\(\*
+    extension ebnf
+    3rd_gen_scale 0

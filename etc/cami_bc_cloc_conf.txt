@@ -1,4 +1,0 @@
-CAMI Bytecode
-    filter remove_matches ^.*?#
-    extension tbc
-    3rd_gen_scale 0
