@@ -23,16 +23,36 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Config
+      Foundation.Diag
+      Foundation.Loc
+      Foundation.Type
+      Foundation.Type.Qualifier
+      Foundation.Utils
+      Foundation.Value
+      Foundation.Value.Basic
+      Foundation.Value.BasicTH
+      Foundation.Value.Derived
+      Foundation.Value.MPFloat
+      Lex.Token
   other-modules:
       Paths_camic
   autogen-modules:
       Paths_camic
   hs-source-dirs:
       src
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2
+  c-sources:
+      src/Foundation/Value/mpfloat.c
   build-depends:
       base >=4.7 && <5
+    , byteorder
+    , mtl
+    , template-haskell
   default-language: Haskell2010
 
 executable camic-exe
@@ -43,10 +63,18 @@ executable camic-exe
       Paths_camic
   hs-source-dirs:
       app
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -threaded -rtsopts -with-rtsopts=-N
+  extra-libraries:
+      mpfr
   build-depends:
       base >=4.7 && <5
+    , byteorder
     , camic
+    , mtl
   default-language: Haskell2010
 
 test-suite camic-test
@@ -58,8 +86,14 @@ test-suite camic-test
       Paths_camic
   hs-source-dirs:
       test
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , byteorder
     , camic
+    , mtl
   default-language: Haskell2010

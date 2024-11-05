@@ -17,6 +17,8 @@ description:         Please see the README on GitHub at <https://github.com/Liu-
 
 dependencies:
 - base >= 4.7 && < 5
+- byteorder
+- mtl
 
 ghc-options:
 - -Wall
@@ -28,9 +30,21 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -O2
+
+default-extensions:
+- OverloadedStrings
+- NamedFieldPuns
+- OverloadedRecordDot
 
 library:
   source-dirs: src
+  dependencies:
+  - byteorder
+  - template-haskell
+  - mtl
+  c-sources:
+  - src/Foundation/Value/mpfloat.c
 
 executables:
   camic-exe:
@@ -42,6 +56,8 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - camic
+    extra-libraries:
+    - mpfr
 
 tests:
   camic-test:
