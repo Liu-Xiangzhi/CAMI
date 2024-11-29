@@ -82,7 +82,6 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
                 "entity '${}' is read by incompatible type `${}`", *am.dsg_reg.entity, lvalue_type)};
     }
     if (lvalue_type.kind() == Kind::function) {
-        // lvalue conversion
         auto ptr = new PointerValue{&type_manager.getPointer(lvalue_type), am.dsg_reg.entity, 0};
         am.operand_stack.push(ValueBox{ptr});
         return;
@@ -105,7 +104,6 @@ void Execute::read(AbstractMachine& am, InstrInfo info)
         }
     }
     if (lvalue_type.kind() == Kind::array) {
-        // lvalue conversion
         const auto [qualifier, _] = peelQualify(*am.dsg_reg.lvalue_type);
         ASSERT(obj.sub_objects.length() > 0, "array object must have at least one element");
         auto& elem_t = addQualify(down_cast<const Array&>(lvalue_type).element, qualifier);

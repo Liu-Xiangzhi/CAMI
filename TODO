@@ -1,0 +1,5 @@
+- modify the behaviour of accessing common initial sequence on union
+- dev the first version of a compiler
+- refactor assembler & deassembler & linker in ocaml
+- dev a deriver
+- complete the design & implementation of binary form cbc

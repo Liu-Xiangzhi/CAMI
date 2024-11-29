@@ -1,0 +1,99 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.36.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           camic
+version:        0.1.0.0
+synopsis:       A compiler that translate C code to CAMI Bytecode
+description:    Please see the README on GitHub at <https://github.com/Liu-Xiangzhi/CAMI#readme>
+category:       compiler
+homepage:       https://github.com/Liu-Xiangzhi/camic#readme
+bug-reports:    https://github.com/Liu-Xiangzhi/camic/issues
+author:         Liu Xiangzhi
+maintainer:     liuxiangzhi000@gmail.com
+copyright:      Copyright (c) 2024 Liu Xiangzhi
+license:        GPL-2.0-or-later
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/Liu-Xiangzhi/camic
+
+library
+  exposed-modules:
+      Config
+      Foundation.Diag
+      Foundation.Loc
+      Foundation.Type
+      Foundation.Type.Qualifier
+      Foundation.Utils
+      Foundation.Value
+      Foundation.Value.Basic
+      Foundation.Value.BasicTH
+      Foundation.Value.Derived
+      Foundation.Value.MPFloat
+      Lex.Token
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      src
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2
+  c-sources:
+      src/Foundation/Value/mpfloat.c
+  build-depends:
+      base >=4.7 && <5
+    , byteorder
+    , mtl
+    , template-haskell
+  default-language: Haskell2010
+
+executable camic-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      app
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -threaded -rtsopts -with-rtsopts=-N
+  extra-libraries:
+      mpfr
+  build-depends:
+      base >=4.7 && <5
+    , byteorder
+    , camic
+    , mtl
+  default-language: Haskell2010
+
+test-suite camic-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_camic
+  autogen-modules:
+      Paths_camic
+  hs-source-dirs:
+      test
+  default-extensions:
+      OverloadedStrings
+      NamedFieldPuns
+      OverloadedRecordDot
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -O2 -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , byteorder
+    , camic
+    , mtl
+  default-language: Haskell2010
